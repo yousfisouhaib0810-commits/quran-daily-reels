@@ -20,6 +20,8 @@ from src.selection.selector import AyahSelector
 from src.captions.generator import CaptionGenerator
 from src.audio.processor import AudioProcessor
 from src.background.manager import BackgroundManager
+from src.ai.background_advisor import BackgroundAdvisor
+from src.detection.person_detector import PersonDetector
 from src.render.renderer import VideoRenderer
 from src.upload.drive import GoogleDriveUploader
 
@@ -121,20 +123,61 @@ def main():
     
     # ===== 5. تحضير الخلفية =====
     print("\n🎬 تحضير الخلفية...")
-    
+
+    advisor_context = {
+        "surah": surah_info["name_en"],
+        "ayah_range": f"{selection['start_ayah']}-{selection['end_ayah']}",
+        "arabic_preview": " | ".join(a["arabic"] for a in ayahs_data[:3]),
+        "english_preview": " ".join(a["english"].title() for a in ayahs_data)[:800]
+    }
+
+    ai_config = config.get("ai_background", {})
+    person_config = config.get("person_filter", {})
+
+    advisor = None
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    if ai_config.get("enabled") and openrouter_key:
+        advisor = BackgroundAdvisor(
+            api_key=openrouter_key,
+            model=ai_config.get("model", "google/gemini-flash-1.5-8b"),
+            temperature=ai_config.get("temperature", 0.35)
+        )
+    elif ai_config.get("enabled"):
+        print("   ⚠️ تم تفعيل الذكاء الاصطناعي لكن لم يتم العثور على OPENROUTER_API_KEY")
+
+    person_detector = None
+    if person_config.get("enabled", True):
+        try:
+            person_detector = PersonDetector(
+                sample_frames=person_config.get("sample_frames", 12),
+                min_detections=person_config.get("min_detections", 1),
+                confidence_threshold=person_config.get("confidence_threshold", 0.5),
+                resize_width=person_config.get("resize_width", 720)
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"   ⚠️ تعذر تهيئة فلتر الأشخاص: {exc}")
+
     pexels_api_key = os.environ.get("PEXELS_API_KEY", config["pexels"]["api_key"])
     
     if pexels_api_key == "YOUR_PEXELS_API_KEY_HERE":
         print("   ⚠️ لم يتم تعيين Pexels API Key - استخدام خلفية افتراضية")
-        # إنشاء خلفية سوداء بسيطة
         background_path = create_default_background(total_duration, config)
+        background = None
     else:
         pexels = PexelsAPI(api_key=pexels_api_key, cache_dir="data/backgrounds")
-        bg_manager = BackgroundManager(pexels)
+        bg_manager = BackgroundManager(
+            pexels,
+            advisor=advisor,
+            person_detector=person_detector,
+            max_attempts=ai_config.get("max_attempts", 5)
+        )
         
         background = bg_manager.get_random_background(
             duration_needed=total_duration,
-            search_queries=config["pexels"]["search_queries"]
+            search_queries=config["pexels"]["search_queries"],
+            context=advisor_context,
+            orientation=config["pexels"].get("orientation", "portrait"),
+            min_duration=config["pexels"].get("min_duration")
         )
         
         if background:
@@ -201,9 +244,10 @@ def main():
     # ===== 9. تحديث الحالة =====
     print("\n💾 تحديث الحالة...")
     selector.update_position(selection["next_position"])
+    background_id = background["id"] if isinstance(background, dict) else None
     selector.update_last_run(
         reciter_id=reciter["id"],
-        background_id=background.get("id") if 'background' in dir() else None
+        background_id=background_id
     )
     
     next_pos = selection["next_position"]

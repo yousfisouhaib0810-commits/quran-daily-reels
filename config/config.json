@@ -106,6 +106,22 @@
     "min_duration": 20
   },
   
+  "ai_background": {
+    "enabled": true,
+    "provider": "openrouter",
+    "model": "google/gemini-flash-1.5-8b",
+    "max_attempts": 5,
+    "temperature": 0.35
+  },
+  
+  "person_filter": {
+    "enabled": true,
+    "sample_frames": 12,
+    "min_detections": 1,
+    "confidence_threshold": 0.5,
+    "resize_width": 720
+  },
+  
   "google_drive": {
     "enabled": true,
     "folder_id": "11SdteGE-G4HHT9RjCXjHpmTTDwCHA-0O"
