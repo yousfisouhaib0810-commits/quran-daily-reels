@@ -127,7 +127,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     
     def create_segments_from_ayahs(self, ayahs_data, padding_before=0.2):
         """
-        تحويل بيانات الآيات لمقاطع متزامنة مع تحليل الصوت
+        تحويل بيانات الآيات لمقاطع متزامنة - كل آية كاملة في segment واحد
         """
         segments = []
         current_time = padding_before
@@ -136,35 +136,18 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             arabic = ayah["arabic"]
             english = ayah["english"]
             duration = ayah["duration"]
-            audio_path = ayah.get("audio_path")
             
-            # تقسيم الآية (2-3 كلمات لكل جزء)
-            arabic_parts = self._split_text_smart(arabic, max_words=3)
-            num_parts = max(1, len(arabic_parts))
-            english_parts = self._redistribute_parts(english, num_parts)
-            
-            # حساب مدد دقيقة لكل جزء بالاعتماد على الصوت
-            part_durations = self._estimate_audio_part_durations(
-                audio_path,
-                num_parts,
-                duration
-            )
-            
-            for i in range(num_parts):
-                ar_part = arabic_parts[i]
-                en_part = english_parts[i] if i < len(english_parts) else ""
-                part_duration = part_durations[i] if i < len(part_durations) else duration / num_parts
-                
-                segment = {
-                    "start": current_time,
-                    "end": current_time + part_duration,
-                    "arabic": ar_part,
-                    "english": en_part.upper(),
-                    "surah": ayah.get("surah"),
-                    "ayah": ayah.get("ayah")
-                }
-                segments.append(segment)
-                current_time += part_duration
+            # عرض الآية كاملة بدون تقسيم
+            segment = {
+                "start": current_time,
+                "end": current_time + duration,
+                "arabic": arabic,
+                "english": english.upper(),
+                "surah": ayah.get("surah"),
+                "ayah": ayah.get("ayah")
+            }
+            segments.append(segment)
+            current_time += duration
         
         return segments
 
