@@ -19,8 +19,24 @@ class AudioProcessor:
         
         audio_files: قائمة مسارات ملفات MP3
         """
+        if not audio_files:
+            raise ValueError("لا توجد ملفات صوت للدمج!")
+        
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # إذا كان ملف واحد فقط
+        if len(audio_files) == 1:
+            # إضافة padding فقط
+            pad_cmd = [
+                'ffmpeg', '-y',
+                '-i', str(audio_files[0]),
+                '-af', f'adelay={int(padding_before*1000)}|{int(padding_before*1000)},apad=pad_dur={padding_after}',
+                '-c:a', 'libmp3lame', '-b:a', '192k',
+                str(output_path)
+            ]
+            subprocess.run(pad_cmd, capture_output=True, check=True)
+            return str(output_path)
         
         # إنشاء ملف concat list
         concat_list = self.output_dir / "concat_list.txt"
@@ -28,7 +44,7 @@ class AudioProcessor:
         with open(concat_list, 'w', encoding='utf-8') as f:
             for audio_file in audio_files:
                 # تحويل المسار لصيغة FFmpeg
-                safe_path = str(audio_file).replace("\\", "/").replace("'", "'\\''")
+                safe_path = str(Path(audio_file).absolute()).replace("\\", "/")
                 f.write(f"file '{safe_path}'\n")
         
         # ملف مؤقت للصوت المدمج
@@ -38,14 +54,13 @@ class AudioProcessor:
         concat_cmd = [
             'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
             '-i', str(concat_list),
-            '-c', 'copy',
+            '-c:a', 'libmp3lame', '-b:a', '192k',
             str(temp_concat)
         ]
         
         subprocess.run(concat_cmd, capture_output=True, check=True)
         
         # إضافة padding (صمت قبل وبعد)
-        # adelay للبداية، apad للنهاية
         pad_cmd = [
             'ffmpeg', '-y',
             '-i', str(temp_concat),

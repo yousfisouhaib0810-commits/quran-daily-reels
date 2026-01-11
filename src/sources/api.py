@@ -11,23 +11,22 @@ from pathlib import Path
 class QuranAPI:
     """API للحصول على النص العثماني والترجمة"""
     
-    BASE_URL = "https://api.quran.com/api/v4"
+    BASE_URL = "https://api.alquran.cloud/v1"
     
     def __init__(self, translation_id=131):  # 131 = Sahih International
         self.translation_id = translation_id
     
     def get_ayah_text(self, surah, ayah):
         """جلب النص العثماني للآية"""
-        url = f"{self.BASE_URL}/quran/verses/uthmani"
-        params = {"verse_key": f"{surah}:{ayah}"}
+        url = f"{self.BASE_URL}/ayah/{surah}:{ayah}/quran-uthmani"
         
         try:
-            response = requests.get(url, params=params, timeout=30)
+            response = requests.get(url, timeout=30)
             response.raise_for_status()
             data = response.json()
             
-            if data.get("verses"):
-                return data["verses"][0]["text_uthmani"]
+            if data.get("status") == "OK" and data.get("data"):
+                return data["data"]["text"]
         except Exception as e:
             print(f"خطأ في جلب النص: {e}")
         
@@ -35,16 +34,15 @@ class QuranAPI:
     
     def get_ayah_translation(self, surah, ayah):
         """جلب الترجمة الإنجليزية للآية"""
-        url = f"{self.BASE_URL}/quran/translations/{self.translation_id}"
-        params = {"verse_key": f"{surah}:{ayah}"}
+        url = f"{self.BASE_URL}/ayah/{surah}:{ayah}/en.sahih"
         
         try:
-            response = requests.get(url, params=params, timeout=30)
+            response = requests.get(url, timeout=30)
             response.raise_for_status()
             data = response.json()
             
-            if data.get("translations"):
-                text = data["translations"][0]["text"]
+            if data.get("status") == "OK" and data.get("data"):
+                text = data["data"]["text"]
                 # إزالة HTML tags
                 import re
                 text = re.sub(r'<[^>]+>', '', text)
