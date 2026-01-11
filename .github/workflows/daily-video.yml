@@ -24,11 +24,11 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       
-      # 3. تثبيت FFmpeg
-      - name: Install FFmpeg
+      # 3. تثبيت FFmpeg والخطوط العربية
+      - name: Install FFmpeg and Arabic fonts
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg fonts-noto-core fonts-noto-extra fonts-arabeyes fonts-hosny-amiri
       
       # 4. تثبيت المكتبات
       - name: Install dependencies
