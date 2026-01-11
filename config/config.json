@@ -8,10 +8,10 @@
     "width": 1080,
     "height": 1920,
     "fps": 30,
-    "bitrate": "4M",
+    "bitrate": "8M",
     "codec": "libx264",
-    "preset": "medium",
-    "audio_bitrate": "192k"
+    "preset": "slow",
+    "audio_bitrate": "256k"
   },
   
   "timing": {
@@ -25,13 +25,13 @@
     "arabic": {
       "name": "Amiri Quran",
       "file": "AmiriQuran-Regular.ttf",
-      "size": 130,
+      "size": 200,
       "color": "#FFFFFF"
     },
     "english": {
       "name": "Inter",
       "file": "Inter-SemiBold.ttf",
-      "size": 48,
+      "size": 70,
       "color": "#FFFFFF",
       "uppercase": true
     }
@@ -39,12 +39,12 @@
   
   "layout": {
     "arabic_y_percent": 50,
-    "english_gap_px": 40,
+    "english_gap_px": 60,
     "safe_margin_percent": 8,
     "shadow": {
       "color": "#000000",
-      "offset": 2,
-      "blur": 3
+      "offset": 3,
+      "blur": 4
     }
   },
   
