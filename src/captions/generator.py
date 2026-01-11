@@ -44,8 +44,8 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Arabic,Amiri,{self.arabic_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,3,2,5,50,50,10,1
-Style: English,Noto Sans,{self.english_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,2,2,5,50,50,10,1
+Style: Arabic,Amiri,{self.arabic_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,3,5,50,50,10,1
+Style: English,Noto Sans,{self.english_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,3,2,5,50,50,10,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -88,28 +88,29 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         content = self._create_header()
         
         for segment in segments:
-            start_time = segment["start"] + padding_before
-            end_time = segment["end"] - padding_after
+            # استخدام التوقيت مباشرة بدون تعديل
+            start_time = segment["start"]
+            end_time = segment["end"]
             
             # تأكد من أن الوقت إيجابي
             if start_time < 0:
                 start_time = 0
             if end_time <= start_time:
-                end_time = start_time + 0.5
+                end_time = start_time + 1.0
             
             start_str = self._format_time(start_time)
             end_str = self._format_time(end_time)
             
             # تقسيم النص إذا كان طويلاً
-            arabic_lines = self._split_long_text(segment["arabic"], max_chars=35, is_arabic=True)
-            english_lines = self._split_long_text(segment["english"], max_chars=45, is_arabic=False)
+            arabic_lines = self._split_long_text(segment["arabic"], max_chars=25, is_arabic=True)
+            english_lines = self._split_long_text(segment["english"], max_chars=40, is_arabic=False)
             
             arabic_text = "\\N".join(arabic_lines)
             english_text = "\\N".join(english_lines)
             
             # حساب موقع Y
             arabic_y = self.arabic_y
-            english_y = arabic_y + self.arabic_size + self.english_gap
+            english_y = arabic_y + self.arabic_size + self.english_gap + 20
             
             # إضافة الأنيميشن (fade)
             fade_effect = f"{{\\fad({self.fade_in},{self.fade_out})}}"

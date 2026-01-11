@@ -25,13 +25,13 @@
     "arabic": {
       "name": "Amiri Quran",
       "file": "AmiriQuran-Regular.ttf",
-      "size": 72,
+      "size": 95,
       "color": "#FFFFFF"
     },
     "english": {
       "name": "Inter",
       "file": "Inter-SemiBold.ttf",
-      "size": 28,
+      "size": 38,
       "color": "#FFFFFF",
       "uppercase": true
     }
@@ -85,24 +85,22 @@
   "pexels": {
     "api_key": "S4In4tuOy8ypvPd5cksUXaT5dEXBh9evQlkNyLeorDHxSLqHqKpYukf0",
     "search_queries": [
-      "mosque interior empty",
-      "islamic dome architecture",
-      "night sky stars timelapse",
-      "galaxy milky way",
-      "ocean waves aerial drone",
-      "clouds timelapse sky",
-      "forest trees fog",
-      "mountains snow aerial",
-      "rain drops window",
-      "desert dunes aerial",
-      "waterfall nature",
-      "northern lights sky",
-      "moon clouds night",
-      "sunrise clouds golden",
-      "abstract light particles",
-      "water reflection calm",
-      "autumn leaves falling",
-      "snow falling trees"
+      "aerial ocean waves drone",
+      "aerial clouds above",
+      "aerial forest drone",
+      "aerial mountains snow",
+      "aerial desert sand",
+      "stars timelapse night",
+      "galaxy space",
+      "northern lights timelapse",
+      "rain window glass",
+      "fog forest trees",
+      "snow falling slow",
+      "leaves falling autumn",
+      "water drops macro",
+      "fire flames close",
+      "abstract particles light",
+      "bokeh lights night"
     ],
     "orientation": "portrait",
     "min_duration": 20
