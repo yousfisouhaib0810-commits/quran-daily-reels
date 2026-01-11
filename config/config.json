@@ -1,0 +1,102 @@
+{
+  "project": {
+    "name": "Quran Daily Reels Bot",
+    "version": "1.0.0"
+  },
+  
+  "video": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "bitrate": "4M",
+    "codec": "libx264",
+    "preset": "medium",
+    "audio_bitrate": "192k"
+  },
+  
+  "timing": {
+    "min_duration_seconds": 15,
+    "padding_before_ms": 200,
+    "padding_after_ms": 200,
+    "allow_short_end_of_surah": true
+  },
+  
+  "fonts": {
+    "arabic": {
+      "name": "Amiri Quran",
+      "file": "AmiriQuran-Regular.ttf",
+      "size": 72,
+      "color": "#FFFFFF"
+    },
+    "english": {
+      "name": "Inter",
+      "file": "Inter-SemiBold.ttf",
+      "size": 28,
+      "color": "#FFFFFF",
+      "uppercase": true
+    }
+  },
+  
+  "layout": {
+    "arabic_y_percent": 50,
+    "english_gap_px": 40,
+    "safe_margin_percent": 8,
+    "shadow": {
+      "color": "#000000",
+      "offset": 2,
+      "blur": 3
+    }
+  },
+  
+  "animation": {
+    "fade_in_ms": 200,
+    "fade_out_ms": 200
+  },
+  
+  "reciters": [
+    {"id": "Abdul_Basit_Murattal_64kbps", "name": "عبد الباسط عبد الصمد - مرتل"},
+    {"id": "Abdul_Basit_Mujawwad_128kbps", "name": "عبد الباسط عبد الصمد - مجود"},
+    {"id": "Abdullah_Basfar_64kbps", "name": "عبدالله بصفر"},
+    {"id": "Abdurrahmaan_As-Sudais_64kbps", "name": "عبدالرحمن السديس"},
+    {"id": "Abu_Bakr_Ash-Shaatree_64kbps", "name": "أبو بكر الشاطري"},
+    {"id": "Ahmed_ibn_Ali_al-Ajamy_64kbps_he", "name": "أحمد العجمي"},
+    {"id": "Alafasy_64kbps", "name": "مشاري راشد العفاسي"},
+    {"id": "Ghamadi_40kbps", "name": "سعد الغامدي"},
+    {"id": "Hani_Rifai_64kbps", "name": "هاني الرفاعي"},
+    {"id": "Husary_64kbps", "name": "محمود خليل الحصري"},
+    {"id": "Husary_Mujawwad_64kbps", "name": "الحصري - مجود"},
+    {"id": "Hudhaify_64kbps", "name": "علي الحذيفي"},
+    {"id": "Ibrahim_Akhdar_32kbps", "name": "إبراهيم الأخضر"},
+    {"id": "MasijidCairo_Minshawy_128kbps", "name": "محمد صديق المنشاوي"},
+    {"id": "Minshawy_Murattal_128kbps", "name": "المنشاوي - مرتل"},
+    {"id": "Minshawy_Mujawwad_64kbps", "name": "المنشاوي - مجود"},
+    {"id": "Mohammad_al_Tablaway_64kbps", "name": "محمد الطبلاوي"},
+    {"id": "Muhammad_Ayyoub_64kbps", "name": "محمد أيوب"},
+    {"id": "Saood_ash-Shuraym_64kbps", "name": "سعود الشريم"},
+    {"id": "Ahmed_Neana_128kbps", "name": "أحمد نعينع"}
+  ],
+  
+  "sources": {
+    "quran_api": "https://api.quran.com/api/v4",
+    "everyayah_base": "https://everyayah.com/data",
+    "translation_id": 131
+  },
+  
+  "pexels": {
+    "api_key": "S4In4tuOy8ypvPd5cksUXaT5dEXBh9evQlkNyLeorDHxSLqHqKpYukf0",
+    "search_queries": ["mosque", "sky clouds", "nature calm", "sunset", "islamic architecture"],
+    "orientation": "portrait",
+    "min_duration": 20
+  },
+  
+  "google_drive": {
+    "enabled": true,
+    "folder_id": "11SdteGE-G4HHT9RjCXjHpmTTDwCHA-0O"
+  },
+  
+  "schedule": {
+    "hour": 6,
+    "minute": 0,
+    "timezone": "Asia/Riyadh"
+  }
+}
