@@ -2,6 +2,8 @@
 توليد ملفات الترجمة ASS للفيديو
 """
 from pathlib import Path
+from pydub import AudioSegment
+from pydub.silence import detect_nonsilent
 
 
 class CaptionGenerator:
@@ -125,10 +127,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     
     def create_segments_from_ayahs(self, ayahs_data, padding_before=0.2):
         """
-        تحويل بيانات الآيات لمقاطع متزامنة
-        مع تقسيم الآيات الطويلة لأجزاء
-        
-        ayahs_data: قائمة من {arabic, english, duration}
+        تحويل بيانات الآيات لمقاطع متزامنة مع تحليل الصوت
         """
         segments = []
         current_time = padding_before
@@ -137,23 +136,24 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             arabic = ayah["arabic"]
             english = ayah["english"]
             duration = ayah["duration"]
+            audio_path = ayah.get("audio_path")
             
-            # تقسيم الآية لأجزاء صغيرة (2-3 كلمات)
+            # تقسيم الآية (2-3 كلمات لكل جزء)
             arabic_parts = self._split_text_smart(arabic, max_words=3)
-            english_parts = self._split_text_smart(english, max_words=4)
-            
-            # مطابقة عدد الأجزاء
-            num_parts = len(arabic_parts)
-            
-            # إعادة توزيع الإنجليزية لتطابق العربية
+            num_parts = max(1, len(arabic_parts))
             english_parts = self._redistribute_parts(english, num_parts)
             
-            # توزيع الوقت على الأجزاء بالتساوي
-            part_duration = duration / num_parts
+            # حساب مدد دقيقة لكل جزء بالاعتماد على الصوت
+            part_durations = self._estimate_audio_part_durations(
+                audio_path,
+                num_parts,
+                duration
+            )
             
             for i in range(num_parts):
                 ar_part = arabic_parts[i]
                 en_part = english_parts[i] if i < len(english_parts) else ""
+                part_duration = part_durations[i] if i < len(part_durations) else duration / num_parts
                 
                 segment = {
                     "start": current_time,
@@ -167,46 +167,80 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 current_time += part_duration
         
         return segments
-    
+
     def _split_text_smart(self, text, max_words=3):
-        """تقسيم النص لأجزاء صغيرة في سطر واحد"""
         words = text.split()
-        
         if len(words) <= max_words:
             return [text]
-        
         parts = []
         for i in range(0, len(words), max_words):
-            part = " ".join(words[i:i + max_words])
-            parts.append(part)
-        
+            parts.append(" ".join(words[i:i + max_words]))
         return parts
-    
+
     def _redistribute_parts(self, text, num_parts):
-        """إعادة توزيع النص على عدد معين من الأجزاء"""
         words = text.split()
-        
         if num_parts <= 0:
             return [text]
-        
         if len(words) <= num_parts:
-            # كلمات أقل من الأجزاء المطلوبة
             parts = []
             for i in range(num_parts):
-                if i < len(words):
-                    parts.append(words[i])
-                else:
-                    parts.append("")
+                parts.append(words[i] if i < len(words) else "")
             return parts
-        
-        # توزيع الكلمات بالتساوي
         words_per_part = len(words) / num_parts
         parts = []
-        
         for i in range(num_parts):
             start = int(i * words_per_part)
             end = int((i + 1) * words_per_part)
             part = " ".join(words[start:end])
             parts.append(part)
-        
         return parts
+
+    def _estimate_audio_part_durations(self, audio_path, num_parts, fallback_duration):
+        """تحليل ملف الصوت لإيجاد مدد دقيقة لكل جزء"""
+        if not audio_path or num_parts <= 0:
+            return [fallback_duration / max(1, num_parts)] * max(1, num_parts)
+        try:
+            audio = AudioSegment.from_file(str(audio_path))
+            silence_thresh = audio.dBFS - 26
+            nonsilent = detect_nonsilent(
+                audio,
+                min_silence_len=120,
+                silence_thresh=silence_thresh
+            )
+            durations = [max(60, end - start) / 1000 for start, end in nonsilent]
+            if not durations:
+                return [fallback_duration / num_parts] * num_parts
+            durations = self._match_segments_to_parts(durations, num_parts)
+            total = sum(durations)
+            scale = fallback_duration / total if total > 0 else 1
+            return [max(0.25, d * scale) for d in durations]
+        except Exception as exc:
+            print(f"⚠️ تعذر تحليل الصوت {audio_path}: {exc}")
+            return [fallback_duration / num_parts] * num_parts
+
+    def _match_segments_to_parts(self, durations, num_parts):
+        """تطويع قائمة المدد لتطابق عدد الأجزاء مع الحفاظ على الترتيب"""
+        segs = durations[:]
+        if not segs:
+            return [1 / num_parts] * num_parts
+        # دمج أو تقسيم حتى نصل للعدد المطلوب
+        while len(segs) > num_parts:
+            new_segs = []
+            i = 0
+            while i < len(segs):
+                if len(new_segs) + (len(segs) - i) == num_parts:
+                    new_segs.extend(segs[i:])
+                    break
+                if i < len(segs) - 1:
+                    new_segs.append(segs[i] + segs[i + 1])
+                    i += 2
+                else:
+                    new_segs.append(segs[i])
+                    i += 1
+            segs = new_segs
+        while len(segs) < num_parts:
+            idx = segs.index(max(segs))
+            half = segs[idx] / 2
+            segs[idx] = half
+            segs.insert(idx, half)
+        return segs
