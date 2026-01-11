@@ -84,7 +84,23 @@
   
   "pexels": {
     "api_key": "S4In4tuOy8ypvPd5cksUXaT5dEXBh9evQlkNyLeorDHxSLqHqKpYukf0",
-    "search_queries": ["mosque", "sky clouds", "nature calm", "sunset", "islamic architecture"],
+    "search_queries": [
+      "mosque architecture dark",
+      "islamic architecture night",
+      "night sky stars",
+      "galaxy universe dark",
+      "ocean waves sunset",
+      "clouds timelapse dramatic",
+      "forest fog morning",
+      "mountains sunrise cinematic",
+      "rain window night",
+      "candlelight dark",
+      "golden light dust",
+      "desert sand dunes",
+      "waterfall nature calm",
+      "northern lights aurora",
+      "moon night clouds"
+    ],
     "orientation": "portrait",
     "min_duration": 20
   },
