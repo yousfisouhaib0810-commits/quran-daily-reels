@@ -51,6 +51,13 @@ class AyahSelector:
         surah, start_ayah = self.get_current_position()
         total_ayahs_in_surah = get_total_ayahs(surah)
         
+        # حماية: تأكد أن الموقع صحيح
+        if start_ayah > total_ayahs_in_surah or start_ayah < 1:
+            print(f"⚠️ موقع خاطئ: السورة {surah} الآية {start_ayah}، إعادة التعيين للآية 1")
+            start_ayah = 1
+            self.state["current_position"]["ayah"] = 1
+            self._save_state()
+        
         selected_ayahs = []
         total_duration = 0
         current_ayah = start_ayah
@@ -75,8 +82,14 @@ class AyahSelector:
                 # تحقق من الوصول للمدة المطلوبة
                 if total_duration >= target_duration:
                     break
+            else:
+                print(f"⚠️ فشل تحميل الصوت للسورة {surah} الآية {current_ayah}")
             
             current_ayah += 1
+        
+        # تأكد أن لدينا آيات على الأقل
+        if not selected_ayahs:
+            raise Exception(f"لم يتم العثور على آيات صالحة من السورة {surah} الآية {start_ayah}")
         
         # تحديث الموقع للفيديو القادم
         next_surah = surah
