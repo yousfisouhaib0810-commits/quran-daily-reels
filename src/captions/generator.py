@@ -142,16 +142,21 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             arabic_parts = self._split_text_smart(arabic, max_words=3)
             english_parts = self._redistribute_parts(english, len(arabic_parts))
             
+            print(f"   📝 الآية {ayah.get('surah')}:{ayah.get('ayah')} مقسمة إلى {len(arabic_parts)} جزء")
+            print(f"      الأجزاء: {arabic_parts[:3]}...")  # أول 3 أجزاء للعرض
+            
             # استخدام تحليل الصوت للتوقيتات فقط (إن وُجد)
             speech_timings = self._detect_speech_segments(audio_path, duration)
             
             if speech_timings and len(speech_timings) > 0:
+                print(f"      🔊 اكتُشف {len(speech_timings)} مقطع صوتي")
                 # استخدم التوقيتات من تحليل الصوت
                 # تطويع عدد الأجزاء ليطابق التوقيتات
                 if len(speech_timings) != len(arabic_parts):
                     # أعد توزيع النص ليطابق عدد التوقيتات
                     arabic_parts = self._split_text_smart(arabic, max_words=3, target_parts=len(speech_timings))
                     english_parts = self._redistribute_parts(english, len(arabic_parts))
+                    print(f"      🔄 تم إعادة التوزيع إلى {len(arabic_parts)} جزء")
                 
                 # إنشاء segments بتوقيتات دقيقة
                 for i, (start_offset, part_duration) in enumerate(speech_timings):
@@ -170,6 +175,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                         "ayah": ayah.get("ayah")
                     })
             else:
+                print(f"      ⚠️ لم يُكتشف صوت - استخدام توزيع متساوٍ")
                 # توزيع متساوٍ إذا فشل تحليل الصوت
                 part_duration = duration / len(arabic_parts)
                 
@@ -185,6 +191,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             
             current_time += duration
         
+        print(f"   ✅ إجمالي {len(segments)} segment تم إنشاؤها")
         return segments
 
     def _split_text_smart(self, text, max_words=3, target_parts=None):
