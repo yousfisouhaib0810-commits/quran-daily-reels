@@ -148,7 +148,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             # استخدام تحليل الصوت للتوقيتات فقط (إن وُجد)
             speech_timings = self._detect_speech_segments(audio_path, duration)
             
-            if speech_timings and len(speech_timings) > 0:
+            # إذا اكتُشف مقطع واحد فقط، تجاهله واستخدم التقسيم الثابت
+            if speech_timings and len(speech_timings) > 1:
                 print(f"      🔊 اكتُشف {len(speech_timings)} مقطع صوتي")
                 # استخدم التوقيتات من تحليل الصوت
                 # تطويع عدد الأجزاء ليطابق التوقيتات
@@ -175,7 +176,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                         "ayah": ayah.get("ayah")
                     })
             else:
-                print(f"      ⚠️ لم يُكتشف صوت - استخدام توزيع متساوٍ")
+                print(f"      ⚠️ لم يُكتشف صوت كافٍ - استخدام تقسيم ثابت ({len(arabic_parts)} جزء)")
                 # توزيع متساوٍ إذا فشل تحليل الصوت
                 part_duration = duration / len(arabic_parts)
                 
