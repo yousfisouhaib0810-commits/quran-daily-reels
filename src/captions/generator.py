@@ -101,24 +101,21 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             start_str = self._format_time(start_time)
             end_str = self._format_time(end_time)
             
-            # تقسيم النص إذا كان طويلاً
-            arabic_lines = self._split_long_text(segment["arabic"], max_chars=25, is_arabic=True)
-            english_lines = self._split_long_text(segment["english"], max_chars=40, is_arabic=False)
+            # النص في سطر واحد (بدون تقسيم)
+            arabic_text = segment["arabic"]
+            english_text = segment["english"]
             
-            arabic_text = "\\N".join(arabic_lines)
-            english_text = "\\N".join(english_lines)
-            
-            # حساب موقع Y
+            # حساب موقع Y - العربي في الوسط والإنجليزي تحته
             arabic_y = self.arabic_y
-            english_y = arabic_y + self.arabic_size + self.english_gap + 20
+            english_y = arabic_y + self.arabic_size + 30
             
             # إضافة الأنيميشن (fade)
             fade_effect = f"{{\\fad({self.fade_in},{self.fade_out})}}"
             
-            # سطر النص العربي
+            # سطر النص العربي (سطر واحد)
             content += f"Dialogue: 0,{start_str},{end_str},Arabic,,0,0,0,,{{\\pos({self.video_width//2},{arabic_y})}}{fade_effect}{arabic_text}\n"
             
-            # سطر الترجمة الإنجليزية
+            # سطر الترجمة الإنجليزية (سطر واحد تحته)
             content += f"Dialogue: 0,{start_str},{end_str},English,,0,0,0,,{{\\pos({self.video_width//2},{english_y})}}{fade_effect}{english_text}\n"
         
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -141,37 +138,28 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             english = ayah["english"]
             duration = ayah["duration"]
             
-            # تقسيم الآية الطويلة لأجزاء
-            arabic_parts = self._split_ayah_into_parts(arabic)
-            english_parts = self._split_ayah_into_parts(english, max_words=6)
+            # تقسيم الآية لأجزاء صغيرة (2-3 كلمات)
+            arabic_parts = self._split_text_smart(arabic, max_words=3)
+            english_parts = self._split_text_smart(english, max_words=4)
             
-            # التأكد من تساوي عدد الأجزاء
-            num_parts = max(len(arabic_parts), len(english_parts))
+            # مطابقة عدد الأجزاء
+            num_parts = len(arabic_parts)
             
-            # إعادة تقسيم ليتساوى العدد
-            if len(arabic_parts) < num_parts:
-                arabic_parts = self._split_ayah_into_parts(arabic, max_words=3)
-            if len(english_parts) < num_parts:
-                english_parts = self._split_ayah_into_parts(english, max_words=5)
+            # إعادة توزيع الإنجليزية لتطابق العربية
+            english_parts = self._redistribute_parts(english, num_parts)
             
-            num_parts = min(len(arabic_parts), len(english_parts))
-            if num_parts == 0:
-                num_parts = 1
-                arabic_parts = [arabic]
-                english_parts = [english]
-            
-            # توزيع الوقت على الأجزاء
+            # توزيع الوقت على الأجزاء بالتساوي
             part_duration = duration / num_parts
             
             for i in range(num_parts):
-                ar_part = arabic_parts[i] if i < len(arabic_parts) else arabic_parts[-1]
-                en_part = english_parts[i] if i < len(english_parts) else english_parts[-1]
+                ar_part = arabic_parts[i]
+                en_part = english_parts[i] if i < len(english_parts) else ""
                 
                 segment = {
                     "start": current_time,
                     "end": current_time + part_duration,
                     "arabic": ar_part,
-                    "english": en_part,
+                    "english": en_part.upper(),
                     "surah": ayah.get("surah"),
                     "ayah": ayah.get("ayah")
                 }
@@ -180,23 +168,45 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         
         return segments
     
-    def _split_ayah_into_parts(self, text, max_words=4):
-        """تقسيم النص لأجزاء صغيرة"""
+    def _split_text_smart(self, text, max_words=3):
+        """تقسيم النص لأجزاء صغيرة في سطر واحد"""
         words = text.split()
         
         if len(words) <= max_words:
             return [text]
         
         parts = []
-        current_part = []
+        for i in range(0, len(words), max_words):
+            part = " ".join(words[i:i + max_words])
+            parts.append(part)
         
-        for word in words:
-            current_part.append(word)
-            if len(current_part) >= max_words:
-                parts.append(" ".join(current_part))
-                current_part = []
+        return parts
+    
+    def _redistribute_parts(self, text, num_parts):
+        """إعادة توزيع النص على عدد معين من الأجزاء"""
+        words = text.split()
         
-        if current_part:
-            parts.append(" ".join(current_part))
+        if num_parts <= 0:
+            return [text]
+        
+        if len(words) <= num_parts:
+            # كلمات أقل من الأجزاء المطلوبة
+            parts = []
+            for i in range(num_parts):
+                if i < len(words):
+                    parts.append(words[i])
+                else:
+                    parts.append("")
+            return parts
+        
+        # توزيع الكلمات بالتساوي
+        words_per_part = len(words) / num_parts
+        parts = []
+        
+        for i in range(num_parts):
+            start = int(i * words_per_part)
+            end = int((i + 1) * words_per_part)
+            part = " ".join(words[start:end])
+            parts.append(part)
         
         return parts
