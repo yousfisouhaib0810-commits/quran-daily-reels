@@ -142,21 +142,26 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             speech_timings = self._detect_speech_segments(audio_path, duration)
             
             if not speech_timings or len(speech_timings) == 0:
-                # إذا فشل التحليل، استخدم الآية كاملة
-                segments.append({
-                    "start": current_time,
-                    "end": current_time + duration,
-                    "arabic": arabic,
-                    "english": english.upper(),
-                    "surah": ayah.get("surah"),
-                    "ayah": ayah.get("ayah")
-                })
+                # إذا فشل التحليل، استخدم تقسيم بسيط
+                arabic_parts = self._split_text_smart(arabic, max_words=2)
+                english_parts = self._redistribute_parts(english, len(arabic_parts))
+                part_duration = duration / len(arabic_parts)
+                
+                for i, (ar_part, en_part) in enumerate(zip(arabic_parts, english_parts)):
+                    segments.append({
+                        "start": current_time + (i * part_duration),
+                        "end": current_time + ((i + 1) * part_duration),
+                        "arabic": ar_part,
+                        "english": en_part.upper(),
+                        "surah": ayah.get("surah"),
+                        "ayah": ayah.get("ayah")
+                    })
                 current_time += duration
                 continue
             
             # تقسيم النص حسب عدد المقاطع الصوتية المكتشفة
             num_parts = len(speech_timings)
-            arabic_parts = self._split_text_smart(arabic, max_words=4, target_parts=num_parts)
+            arabic_parts = self._split_text_smart(arabic, max_words=2, target_parts=num_parts)
             english_parts = self._redistribute_parts(english, len(arabic_parts))
             
             # إنشاء segments بتوقيتات دقيقة من تحليل الصوت
@@ -181,11 +186,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         
         return segments
 
-    def _split_text_smart(self, text, max_words=4, target_parts=None):
-        """تقسيم النص بذكاء حسب عدد الأجزاء المطلوبة"""
+    def _split_text_smart(self, text, max_words=2, target_parts=None):
+        """تقسيم النص لأجزاء قصيرة جداً (2-3 كلمات فقط)"""
         words = text.split()
         if not target_parts or target_parts <= 0:
-            # تقسيم عادي
+            # تقسيم عادي: كل 2-3 كلمات
             if len(words) <= max_words:
                 return [text]
             parts = []
@@ -195,14 +200,18 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         
         # تقسيم متوازن حسب target_parts
         if len(words) <= target_parts:
-            return [" ".join([w]) for w in words]
+            # كل كلمة لوحدها
+            return [w for w in words]
         
-        words_per_part = len(words) / target_parts
+        # توزيع متوازن
+        words_per_part = max(2, len(words) // target_parts)
         parts = []
         for i in range(target_parts):
-            start = int(i * words_per_part)
-            end = int((i + 1) * words_per_part) if i < target_parts - 1 else len(words)
-            parts.append(" ".join(words[start:end]))
+            start = int(i * len(words) / target_parts)
+            end = int((i + 1) * len(words) / target_parts) if i < target_parts - 1 else len(words)
+            part_words = words[start:end]
+            if part_words:
+                parts.append(" ".join(part_words))
         return parts
 
     def _redistribute_parts(self, text, num_parts):
@@ -225,7 +234,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     def _detect_speech_segments(self, audio_path, total_duration):
         """
-        كشف مقاطع الكلام في الصوت بدقة عالية
+        كشف مقاطع الكلام في الصوت بدقة عالية جداً
         يرجع: [(start_offset, duration), ...]
         """
         if not audio_path:
@@ -234,16 +243,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         try:
             audio = AudioSegment.from_file(str(audio_path))
             
-            # إعدادات حساسة لكشف دقيق
-            silence_thresh = audio.dBFS - 22  # أكثر حساسية
-            min_silence_len = 80  # فترة صمت قصيرة جداً (80ms)
+            # إعدادات فائقة الحساسية للتزامن السريع
+            silence_thresh = audio.dBFS - 18  # حساسية عالية جداً
+            min_silence_len = 50  # فترة صمت قصيرة جداً (50ms)
             
             # كشف المقاطع غير الصامتة
             nonsilent_ranges = detect_nonsilent(
                 audio,
                 min_silence_len=min_silence_len,
                 silence_thresh=silence_thresh,
-                seek_step=10  # دقة عالية
+                seek_step=5  # دقة فائقة
             )
             
             if not nonsilent_ranges:
@@ -254,12 +263,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             for start_ms, end_ms in nonsilent_ranges:
                 start_sec = start_ms / 1000.0
                 duration_sec = (end_ms - start_ms) / 1000.0
-                # تصفية المقاطع القصيرة جداً
-                if duration_sec >= 0.15:  # على الأقل 150ms
+                # قبول المقاطع القصيرة جداً للتزامن السريع
+                if duration_sec >= 0.08:  # على الأقل 80ms
                     timings.append((start_sec, duration_sec))
             
             # دمج المقاطع المتقاربة جداً
-            timings = self._merge_close_segments(timings, gap_threshold=0.25)
+            timings = self._merge_close_segments(timings, gap_threshold=0.15)
             
             return timings if timings else None
             
@@ -267,7 +276,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             print(f"⚠️ تعذر تحليل الصوت {audio_path}: {exc}")
             return None
     
-    def _merge_close_segments(self, timings, gap_threshold=0.25):
+    def _merge_close_segments(self, timings, gap_threshold=0.15):
         """دمج المقاطع المتقاربة جداً لتحسين التزامن"""
         if not timings or len(timings) <= 1:
             return timings
