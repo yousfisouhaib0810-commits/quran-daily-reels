@@ -127,7 +127,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     
     def create_segments_from_ayahs(self, ayahs_data, padding_before=0.2):
         """
-        تحويل بيانات الآيات لمقاطع متزامنة جملة بجملة بدقة عالية
+        تحويل بيانات الآيات لمقاطع متزامنة - تقسيم إجباري لأجزاء قصيرة
         """
         segments = []
         current_time = padding_before
@@ -138,13 +138,39 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             duration = ayah["duration"]
             audio_path = ayah.get("audio_path")
             
-            # استخدام تحليل الصوت المتقدم للحصول على توقيتات دقيقة
+            # تقسيم النص إجبارياً لأجزاء قصيرة (2-3 كلمات)
+            arabic_parts = self._split_text_smart(arabic, max_words=3)
+            english_parts = self._redistribute_parts(english, len(arabic_parts))
+            
+            # استخدام تحليل الصوت للتوقيتات فقط (إن وُجد)
             speech_timings = self._detect_speech_segments(audio_path, duration)
             
-            if not speech_timings or len(speech_timings) == 0:
-                # إذا فشل التحليل، استخدم تقسيم بسيط
-                arabic_parts = self._split_text_smart(arabic, max_words=2)
-                english_parts = self._redistribute_parts(english, len(arabic_parts))
+            if speech_timings and len(speech_timings) > 0:
+                # استخدم التوقيتات من تحليل الصوت
+                # تطويع عدد الأجزاء ليطابق التوقيتات
+                if len(speech_timings) != len(arabic_parts):
+                    # أعد توزيع النص ليطابق عدد التوقيتات
+                    arabic_parts = self._split_text_smart(arabic, max_words=3, target_parts=len(speech_timings))
+                    english_parts = self._redistribute_parts(english, len(arabic_parts))
+                
+                # إنشاء segments بتوقيتات دقيقة
+                for i, (start_offset, part_duration) in enumerate(speech_timings):
+                    if i >= len(arabic_parts):
+                        break
+                    
+                    ar_part = arabic_parts[i]
+                    en_part = english_parts[i] if i < len(english_parts) else ""
+                    
+                    segments.append({
+                        "start": current_time + start_offset,
+                        "end": current_time + start_offset + part_duration,
+                        "arabic": ar_part,
+                        "english": en_part.upper(),
+                        "surah": ayah.get("surah"),
+                        "ayah": ayah.get("ayah")
+                    })
+            else:
+                # توزيع متساوٍ إذا فشل تحليل الصوت
                 part_duration = duration / len(arabic_parts)
                 
                 for i, (ar_part, en_part) in enumerate(zip(arabic_parts, english_parts)):
@@ -156,55 +182,38 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                         "surah": ayah.get("surah"),
                         "ayah": ayah.get("ayah")
                     })
-                current_time += duration
-                continue
-            
-            # تقسيم النص حسب عدد المقاطع الصوتية المكتشفة
-            num_parts = len(speech_timings)
-            arabic_parts = self._split_text_smart(arabic, max_words=2, target_parts=num_parts)
-            english_parts = self._redistribute_parts(english, len(arabic_parts))
-            
-            # إنشاء segments بتوقيتات دقيقة من تحليل الصوت
-            for i, (start_offset, part_duration) in enumerate(speech_timings):
-                if i >= len(arabic_parts):
-                    break
-                    
-                ar_part = arabic_parts[i]
-                en_part = english_parts[i] if i < len(english_parts) else ""
-                
-                segment = {
-                    "start": current_time + start_offset,
-                    "end": current_time + start_offset + part_duration,
-                    "arabic": ar_part,
-                    "english": en_part.upper(),
-                    "surah": ayah.get("surah"),
-                    "ayah": ayah.get("ayah")
-                }
-                segments.append(segment)
             
             current_time += duration
         
         return segments
 
-    def _split_text_smart(self, text, max_words=2, target_parts=None):
-        """تقسيم النص لأجزاء قصيرة جداً (2-3 كلمات فقط)"""
+    def _split_text_smart(self, text, max_words=3, target_parts=None):
+        """تقسيم النص لأجزاء قصيرة (2-3 كلمات فقط) - إجباري"""
         words = text.split()
+        
         if not target_parts or target_parts <= 0:
-            # تقسيم عادي: كل 2-3 كلمات
+            # تقسيم إجباري: كل 2-3 كلمات بالضبط
             if len(words) <= max_words:
                 return [text]
             parts = []
             for i in range(0, len(words), max_words):
-                parts.append(" ".join(words[i:i + max_words]))
+                part = " ".join(words[i:i + max_words])
+                if part:  # تأكد أن الجزء ليس فارغاً
+                    parts.append(part)
             return parts
         
         # تقسيم متوازن حسب target_parts
         if len(words) <= target_parts:
-            # كل كلمة لوحدها
-            return [w for w in words]
+            # كل كلمة أو كلمتين
+            parts = []
+            for i in range(0, len(words), 2):
+                part = " ".join(words[i:i+2])
+                if part:
+                    parts.append(part)
+            return parts
         
-        # توزيع متوازن
-        words_per_part = max(2, len(words) // target_parts)
+        # توزيع متوازن مع ضمان أجزاء قصيرة
+        words_per_part = max(2, min(max_words, len(words) // target_parts))
         parts = []
         for i in range(target_parts):
             start = int(i * len(words) / target_parts)
@@ -212,7 +221,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             part_words = words[start:end]
             if part_words:
                 parts.append(" ".join(part_words))
-        return parts
+        return parts if parts else [text]
 
     def _redistribute_parts(self, text, num_parts):
         words = text.split()
