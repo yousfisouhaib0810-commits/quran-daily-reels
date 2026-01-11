@@ -25,13 +25,13 @@
     "arabic": {
       "name": "Amiri Quran",
       "file": "AmiriQuran-Regular.ttf",
-      "size": 95,
+      "size": 130,
       "color": "#FFFFFF"
     },
     "english": {
       "name": "Inter",
       "file": "Inter-SemiBold.ttf",
-      "size": 38,
+      "size": 48,
       "color": "#FFFFFF",
       "uppercase": true
     }

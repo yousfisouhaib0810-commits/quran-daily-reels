@@ -44,7 +44,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Arabic,Amiri,{self.arabic_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,3,5,50,50,10,1
+Style: Arabic,Amiri,{self.arabic_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,5,3,5,50,50,10,1
 Style: English,Noto Sans,{self.english_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,3,2,5,50,50,10,1
 
 [Events]
@@ -129,6 +129,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     def create_segments_from_ayahs(self, ayahs_data, padding_before=0.2):
         """
         تحويل بيانات الآيات لمقاطع متزامنة
+        مع تقسيم الآيات الطويلة لأجزاء
         
         ayahs_data: قائمة من {arabic, english, duration}
         """
@@ -136,15 +137,66 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         current_time = padding_before
         
         for ayah in ayahs_data:
-            segment = {
-                "start": current_time,
-                "end": current_time + ayah["duration"],
-                "arabic": ayah["arabic"],
-                "english": ayah["english"],
-                "surah": ayah.get("surah"),
-                "ayah": ayah.get("ayah")
-            }
-            segments.append(segment)
-            current_time += ayah["duration"]
+            arabic = ayah["arabic"]
+            english = ayah["english"]
+            duration = ayah["duration"]
+            
+            # تقسيم الآية الطويلة لأجزاء
+            arabic_parts = self._split_ayah_into_parts(arabic)
+            english_parts = self._split_ayah_into_parts(english, max_words=6)
+            
+            # التأكد من تساوي عدد الأجزاء
+            num_parts = max(len(arabic_parts), len(english_parts))
+            
+            # إعادة تقسيم ليتساوى العدد
+            if len(arabic_parts) < num_parts:
+                arabic_parts = self._split_ayah_into_parts(arabic, max_words=3)
+            if len(english_parts) < num_parts:
+                english_parts = self._split_ayah_into_parts(english, max_words=5)
+            
+            num_parts = min(len(arabic_parts), len(english_parts))
+            if num_parts == 0:
+                num_parts = 1
+                arabic_parts = [arabic]
+                english_parts = [english]
+            
+            # توزيع الوقت على الأجزاء
+            part_duration = duration / num_parts
+            
+            for i in range(num_parts):
+                ar_part = arabic_parts[i] if i < len(arabic_parts) else arabic_parts[-1]
+                en_part = english_parts[i] if i < len(english_parts) else english_parts[-1]
+                
+                segment = {
+                    "start": current_time,
+                    "end": current_time + part_duration,
+                    "arabic": ar_part,
+                    "english": en_part,
+                    "surah": ayah.get("surah"),
+                    "ayah": ayah.get("ayah")
+                }
+                segments.append(segment)
+                current_time += part_duration
         
         return segments
+    
+    def _split_ayah_into_parts(self, text, max_words=4):
+        """تقسيم النص لأجزاء صغيرة"""
+        words = text.split()
+        
+        if len(words) <= max_words:
+            return [text]
+        
+        parts = []
+        current_part = []
+        
+        for word in words:
+            current_part.append(word)
+            if len(current_part) >= max_words:
+                parts.append(" ".join(current_part))
+                current_part = []
+        
+        if current_part:
+            parts.append(" ".join(current_part))
+        
+        return parts
