@@ -127,7 +127,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     
     def create_segments_from_ayahs(self, ayahs_data, padding_before=0.2):
         """
-        تحويل بيانات الآيات لمقاطع متزامنة - كل آية كاملة في segment واحد
+        تحويل بيانات الآيات لمقاطع متزامنة جملة بجملة بدقة عالية
         """
         segments = []
         current_time = padding_before
@@ -136,28 +136,73 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             arabic = ayah["arabic"]
             english = ayah["english"]
             duration = ayah["duration"]
+            audio_path = ayah.get("audio_path")
             
-            # عرض الآية كاملة بدون تقسيم
-            segment = {
-                "start": current_time,
-                "end": current_time + duration,
-                "arabic": arabic,
-                "english": english.upper(),
-                "surah": ayah.get("surah"),
-                "ayah": ayah.get("ayah")
-            }
-            segments.append(segment)
+            # استخدام تحليل الصوت المتقدم للحصول على توقيتات دقيقة
+            speech_timings = self._detect_speech_segments(audio_path, duration)
+            
+            if not speech_timings or len(speech_timings) == 0:
+                # إذا فشل التحليل، استخدم الآية كاملة
+                segments.append({
+                    "start": current_time,
+                    "end": current_time + duration,
+                    "arabic": arabic,
+                    "english": english.upper(),
+                    "surah": ayah.get("surah"),
+                    "ayah": ayah.get("ayah")
+                })
+                current_time += duration
+                continue
+            
+            # تقسيم النص حسب عدد المقاطع الصوتية المكتشفة
+            num_parts = len(speech_timings)
+            arabic_parts = self._split_text_smart(arabic, max_words=4, target_parts=num_parts)
+            english_parts = self._redistribute_parts(english, len(arabic_parts))
+            
+            # إنشاء segments بتوقيتات دقيقة من تحليل الصوت
+            for i, (start_offset, part_duration) in enumerate(speech_timings):
+                if i >= len(arabic_parts):
+                    break
+                    
+                ar_part = arabic_parts[i]
+                en_part = english_parts[i] if i < len(english_parts) else ""
+                
+                segment = {
+                    "start": current_time + start_offset,
+                    "end": current_time + start_offset + part_duration,
+                    "arabic": ar_part,
+                    "english": en_part.upper(),
+                    "surah": ayah.get("surah"),
+                    "ayah": ayah.get("ayah")
+                }
+                segments.append(segment)
+            
             current_time += duration
         
         return segments
 
-    def _split_text_smart(self, text, max_words=3):
+    def _split_text_smart(self, text, max_words=4, target_parts=None):
+        """تقسيم النص بذكاء حسب عدد الأجزاء المطلوبة"""
         words = text.split()
-        if len(words) <= max_words:
-            return [text]
+        if not target_parts or target_parts <= 0:
+            # تقسيم عادي
+            if len(words) <= max_words:
+                return [text]
+            parts = []
+            for i in range(0, len(words), max_words):
+                parts.append(" ".join(words[i:i + max_words]))
+            return parts
+        
+        # تقسيم متوازن حسب target_parts
+        if len(words) <= target_parts:
+            return [" ".join([w]) for w in words]
+        
+        words_per_part = len(words) / target_parts
         parts = []
-        for i in range(0, len(words), max_words):
-            parts.append(" ".join(words[i:i + max_words]))
+        for i in range(target_parts):
+            start = int(i * words_per_part)
+            end = int((i + 1) * words_per_part) if i < target_parts - 1 else len(words)
+            parts.append(" ".join(words[start:end]))
         return parts
 
     def _redistribute_parts(self, text, num_parts):
@@ -178,52 +223,74 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             parts.append(part)
         return parts
 
-    def _estimate_audio_part_durations(self, audio_path, num_parts, fallback_duration):
-        """تحليل ملف الصوت لإيجاد مدد دقيقة لكل جزء"""
-        if not audio_path or num_parts <= 0:
-            return [fallback_duration / max(1, num_parts)] * max(1, num_parts)
+    def _detect_speech_segments(self, audio_path, total_duration):
+        """
+        كشف مقاطع الكلام في الصوت بدقة عالية
+        يرجع: [(start_offset, duration), ...]
+        """
+        if not audio_path:
+            return None
+        
         try:
             audio = AudioSegment.from_file(str(audio_path))
-            silence_thresh = audio.dBFS - 26
-            nonsilent = detect_nonsilent(
+            
+            # إعدادات حساسة لكشف دقيق
+            silence_thresh = audio.dBFS - 22  # أكثر حساسية
+            min_silence_len = 80  # فترة صمت قصيرة جداً (80ms)
+            
+            # كشف المقاطع غير الصامتة
+            nonsilent_ranges = detect_nonsilent(
                 audio,
-                min_silence_len=120,
-                silence_thresh=silence_thresh
+                min_silence_len=min_silence_len,
+                silence_thresh=silence_thresh,
+                seek_step=10  # دقة عالية
             )
-            durations = [max(60, end - start) / 1000 for start, end in nonsilent]
-            if not durations:
-                return [fallback_duration / num_parts] * num_parts
-            durations = self._match_segments_to_parts(durations, num_parts)
-            total = sum(durations)
-            scale = fallback_duration / total if total > 0 else 1
-            return [max(0.25, d * scale) for d in durations]
+            
+            if not nonsilent_ranges:
+                return None
+            
+            # تحويل لتوقيتات نسبية
+            timings = []
+            for start_ms, end_ms in nonsilent_ranges:
+                start_sec = start_ms / 1000.0
+                duration_sec = (end_ms - start_ms) / 1000.0
+                # تصفية المقاطع القصيرة جداً
+                if duration_sec >= 0.15:  # على الأقل 150ms
+                    timings.append((start_sec, duration_sec))
+            
+            # دمج المقاطع المتقاربة جداً
+            timings = self._merge_close_segments(timings, gap_threshold=0.25)
+            
+            return timings if timings else None
+            
         except Exception as exc:
             print(f"⚠️ تعذر تحليل الصوت {audio_path}: {exc}")
-            return [fallback_duration / num_parts] * num_parts
-
-    def _match_segments_to_parts(self, durations, num_parts):
-        """تطويع قائمة المدد لتطابق عدد الأجزاء مع الحفاظ على الترتيب"""
-        segs = durations[:]
-        if not segs:
-            return [1 / num_parts] * num_parts
-        # دمج أو تقسيم حتى نصل للعدد المطلوب
-        while len(segs) > num_parts:
-            new_segs = []
-            i = 0
-            while i < len(segs):
-                if len(new_segs) + (len(segs) - i) == num_parts:
-                    new_segs.extend(segs[i:])
-                    break
-                if i < len(segs) - 1:
-                    new_segs.append(segs[i] + segs[i + 1])
-                    i += 2
-                else:
-                    new_segs.append(segs[i])
-                    i += 1
-            segs = new_segs
-        while len(segs) < num_parts:
-            idx = segs.index(max(segs))
-            half = segs[idx] / 2
-            segs[idx] = half
-            segs.insert(idx, half)
-        return segs
+            return None
+    
+    def _merge_close_segments(self, timings, gap_threshold=0.25):
+        """دمج المقاطع المتقاربة جداً لتحسين التزامن"""
+        if not timings or len(timings) <= 1:
+            return timings
+        
+        merged = []
+        current_start, current_duration = timings[0]
+        current_end = current_start + current_duration
+        
+        for start, duration in timings[1:]:
+            gap = start - current_end
+            
+            if gap <= gap_threshold:
+                # دمج المقطعين
+                current_duration = (start + duration) - current_start
+                current_end = current_start + current_duration
+            else:
+                # حفظ المقطع الحالي والبدء بمقطع جديد
+                merged.append((current_start, current_duration))
+                current_start = start
+                current_duration = duration
+                current_end = start + duration
+        
+        # إضافة آخر مقطع
+        merged.append((current_start, current_duration))
+        
+        return merged
