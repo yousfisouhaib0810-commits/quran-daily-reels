@@ -5,7 +5,7 @@ import json
 import textwrap
 from typing import Iterable, List, Optional
 
-import openai
+from openai import OpenAI
 
 
 class BackgroundAdvisor:
@@ -25,7 +25,7 @@ class BackgroundAdvisor:
         self.model = model
         self.temperature = temperature
         self.max_suggestions = max(1, max_suggestions)
-        openai.api_key = api_key
+        self.client = OpenAI(api_key=api_key)
 
     def suggest_queries(
         self,
@@ -37,7 +37,7 @@ class BackgroundAdvisor:
             return []
 
         try:
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 temperature=self.temperature,
                 messages=[
@@ -59,7 +59,7 @@ class BackgroundAdvisor:
                 max_tokens=700
             )
 
-            message = response["choices"][0]["message"]["content"]
+            message = response.choices[0].message.content
             return self._parse_queries(message)
         except Exception as exc:
             print(f"⚠️ فشل طلب الذكاء الاصطناعي (OpenAI): {exc}")

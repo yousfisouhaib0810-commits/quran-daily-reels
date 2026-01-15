@@ -78,7 +78,7 @@ class CaptionGenerator:
         """
         توليد ملف ASS من مقاطع الآيات
         
-        segments: قائمة من {start, end, arabic, english}
+        segments: قائمة من {start, end, arabic}
         """
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -144,8 +144,7 @@ class CaptionGenerator:
                 # تطويع عدد الأجزاء ليطابق التوقيتات
                 if len(speech_timings) != len(arabic_parts):
                     # أعد توزيع النص ليطابق عدد التوقيتات
-                    arabic_parts = self._split_text_smart(arabic, max_words=3, target_parts=len(speech_timings))
-                    english_parts = self._redistribute_parts(english, len(arabic_parts))
+                    arabic_parts = self._split_text_smart(arabic, max_words=4, target_parts=len(speech_timings))
                     print(f"      🔄 تم إعادة التوزيع إلى {len(arabic_parts)} جزء")
                 
                 # إنشاء segments بتوقيتات دقيقة (نص عربي فقط)
@@ -166,7 +165,7 @@ class CaptionGenerator:
                 print(f"      ⚠️ لم يُكتشف صوت كافٍ - استخدام تقسيم ثابت ({len(arabic_parts)} جزء)")
                 # توزيع متساوٍ إذا فشل تحليل الصوت
                 part_duration = duration / len(arabic_parts)
-                
+
                 for i, ar_part in enumerate(arabic_parts):
                     segments.append({
                         "start": current_time + (i * part_duration),
@@ -181,7 +180,7 @@ class CaptionGenerator:
         print(f"   ✅ إجمالي {len(segments)} segment تم إنشاؤها")
         return segments
 
-    def _split_text_smart(self, text, max_words=3, target_parts=None):
+    def _split_text_smart(self, text, max_words=4, target_parts=None):
         """تقسيم النص لأجزاء قصيرة (2-3 كلمات فقط) - إجباري"""
         words = text.split()
         
@@ -217,23 +216,6 @@ class CaptionGenerator:
                 parts.append(" ".join(part_words))
         return parts if parts else [text]
 
-    def _redistribute_parts(self, text, num_parts):
-        words = text.split()
-        if num_parts <= 0:
-            return [text]
-        if len(words) <= num_parts:
-            parts = []
-            for i in range(num_parts):
-                parts.append(words[i] if i < len(words) else "")
-            return parts
-        words_per_part = len(words) / num_parts
-        parts = []
-        for i in range(num_parts):
-            start = int(i * words_per_part)
-            end = int((i + 1) * words_per_part)
-            part = " ".join(words[start:end])
-            parts.append(part)
-        return parts
 
     def _detect_speech_segments(self, audio_path, total_duration):
         """
