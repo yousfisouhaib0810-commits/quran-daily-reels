@@ -71,9 +71,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             end_str = self._format_time(end_time)
             
             arabic_text = segment["arabic"]
-            fade_effect = f"{{\\fad({self.fade_in},{self.fade_out})}}"
             
-            content += f"Dialogue: 0,{start_str},{end_str},Arabic,,0,0,0,,{{\\pos({self.video_width//2},{self.arabic_y})}}{fade_effect}{arabic_text}\n"
+            # بدون تأثير fade - ظهور واختفاء فوري مع الصوت
+            content += f"Dialogue: 0,{start_str},{end_str},Arabic,,0,0,0,,{{\\pos({self.video_width//2},{self.arabic_y})}}{arabic_text}\n"
         
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(content)
