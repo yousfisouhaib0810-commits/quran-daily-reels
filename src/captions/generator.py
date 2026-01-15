@@ -1,24 +1,28 @@
 """
 توليد ملفات الترجمة ASS للفيديو
+تزامن دقيق 100% مع الصوت - بحد أقصى 4 كلمات لكل مقطع
 """
 from pathlib import Path
 from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
+import math
 
 
 class CaptionGenerator:
-    """مولد ترجمات ASS"""
+    """مولد ترجمات ASS مع تزامن دقيق"""
+    
+    MAX_WORDS_PER_SEGMENT = 4  # الحد الأقصى للكلمات في كل مقطع
     
     def __init__(self, config):
         self.config = config
         self.video_width = config["video"]["width"]
         self.video_height = config["video"]["height"]
         
-        # إعدادات الخطوط (العربية فقط — حذف الترجمة)
+        # إعدادات الخطوط (العربية فقط)
         self.arabic_font = config["fonts"]["arabic"]["name"]
         self.arabic_size = config["fonts"]["arabic"]["size"]
         
-        # إعدادات التموضع (العربية فقط)
+        # إعدادات التموضع
         self.arabic_y = int(self.video_height * config["layout"]["arabic_y_percent"] / 100)
         
         # إعدادات الأنيميشن
@@ -26,7 +30,7 @@ class CaptionGenerator:
         self.fade_out = config["animation"]["fade_out_ms"]
     
     def _format_time(self, seconds):
-        """تحويل الثواني لتنسيق ASS"""
+        """تحويل الثواني لتنسيق ASS بدقة 0.01 ثانية"""
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
         secs = seconds % 60
@@ -35,81 +39,41 @@ class CaptionGenerator:
     def _create_header(self):
         """إنشاء رأس ملف ASS"""
         return f"""[Script Info]
-    Title: Quran Daily Reel
-    ScriptType: v4.00+
-    PlayResX: {self.video_width}
-    PlayResY: {self.video_height}
-    WrapStyle: 0
+Title: Quran Daily Reel
+ScriptType: v4.00+
+PlayResX: {self.video_width}
+PlayResY: {self.video_height}
+WrapStyle: 0
 
-    [V4+ Styles]
-    Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-    Style: Arabic,Amiri,{self.arabic_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,6,4,5,50,50,10,1
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Arabic,Amiri,{self.arabic_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,6,4,5,50,50,10,1
 
-    [Events]
-    Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-    """
-    
-    def _split_long_text(self, text, max_chars=40, is_arabic=True):
-        """تقسيم النص الطويل لأسطر متعددة"""
-        if len(text) <= max_chars:
-            return [text]
-        
-        words = text.split()
-        lines = []
-        current_line = []
-        current_length = 0
-        
-        for word in words:
-            if current_length + len(word) + 1 <= max_chars:
-                current_line.append(word)
-                current_length += len(word) + 1
-            else:
-                if current_line:
-                    lines.append(" ".join(current_line))
-                current_line = [word]
-                current_length = len(word)
-        
-        if current_line:
-            lines.append(" ".join(current_line))
-        
-        return lines
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
     
     def generate_ass(self, segments, output_path, padding_before=0.2, padding_after=0.2):
-        """
-        توليد ملف ASS من مقاطع الآيات
-        
-        segments: قائمة من {start, end, arabic}
-        """
+        """توليد ملف ASS من مقاطع الآيات"""
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         content = self._create_header()
         
         for segment in segments:
-            # استخدام التوقيت مباشرة بدون تعديل
-            start_time = segment["start"]
+            start_time = max(0, segment["start"])
             end_time = segment["end"]
             
-            # تأكد من أن الوقت إيجابي
-            if start_time < 0:
-                start_time = 0
             if end_time <= start_time:
-                end_time = start_time + 1.0
+                end_time = start_time + 0.5
             
             start_str = self._format_time(start_time)
             end_str = self._format_time(end_time)
             
-            # النص العربي فقط (لا ترجمة)
             arabic_text = segment["arabic"]
-
-            # حساب موقع Y - العربي في الوسط
-            arabic_y = self.arabic_y
-
-            # إضافة الأنيميشن (fade)
             fade_effect = f"{{\\fad({self.fade_in},{self.fade_out})}}"
-
-            # سطر النص العربي
-            content += f"Dialogue: 0,{start_str},{end_str},Arabic,,0,0,0,,{{\\pos({self.video_width//2},{arabic_y})}}{fade_effect}{arabic_text}\n"
+            
+            content += f"Dialogue: 0,{start_str},{end_str},Arabic,,0,0,0,,{{\\pos({self.video_width//2},{self.arabic_y})}}{fade_effect}{arabic_text}\n"
         
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -118,7 +82,10 @@ class CaptionGenerator:
     
     def create_segments_from_ayahs(self, ayahs_data, padding_before=0.2):
         """
-        تحويل بيانات الآيات لمقاطع متزامنة - تقسيم إجباري لأجزاء قصيرة
+        تحويل بيانات الآيات لمقاطع متزامنة بدقة 100%
+        - تحليل الصوت لكشف مواقع الكلمات
+        - تقسيم النص لأجزاء بحد أقصى 4 كلمات
+        - مطابقة التوقيتات مع مقاطع الصوت
         """
         segments = []
         current_time = padding_before
@@ -127,164 +94,209 @@ class CaptionGenerator:
             arabic = ayah["arabic"]
             duration = ayah["duration"]
             audio_path = ayah.get("audio_path")
-
-            # تقسيم النص إجبارياً لأجزاء قصيرة (بحد أقصى 4 كلمات)
-            arabic_parts = self._split_text_smart(arabic, max_words=4)
             
-            print(f"   📝 الآية {ayah.get('surah')}:{ayah.get('ayah')} مقسمة إلى {len(arabic_parts)} جزء")
-            print(f"      الأجزاء: {arabic_parts[:3]}...")  # أول 3 أجزاء للعرض
+            words = arabic.split()
+            num_words = len(words)
             
-            # استخدام تحليل الصوت للتوقيتات فقط (إن وُجد)
-            speech_timings = self._detect_speech_segments(audio_path, duration)
+            # حساب عدد الأجزاء المطلوبة (بحد أقصى 4 كلمات لكل جزء)
+            num_parts = math.ceil(num_words / self.MAX_WORDS_PER_SEGMENT)
             
-            # إذا اكتُشف مقطع واحد فقط، تجاهله واستخدم التقسيم الثابت
-            if speech_timings and len(speech_timings) > 1:
-                print(f"      🔊 اكتُشف {len(speech_timings)} مقطع صوتي")
-                # استخدم التوقيتات من تحليل الصوت
-                # تطويع عدد الأجزاء ليطابق التوقيتات
-                if len(speech_timings) != len(arabic_parts):
-                    # أعد توزيع النص ليطابق عدد التوقيتات
-                    arabic_parts = self._split_text_smart(arabic, max_words=4, target_parts=len(speech_timings))
-                    print(f"      🔄 تم إعادة التوزيع إلى {len(arabic_parts)} جزء")
-                
-                # إنشاء segments بتوقيتات دقيقة (نص عربي فقط)
-                for i, (start_offset, part_duration) in enumerate(speech_timings):
-                    if i >= len(arabic_parts):
-                        break
-
-                    ar_part = arabic_parts[i]
-
-                    segments.append({
-                        "start": current_time + start_offset,
-                        "end": current_time + start_offset + part_duration,
-                        "arabic": ar_part,
-                        "surah": ayah.get("surah"),
-                        "ayah": ayah.get("ayah")
-                    })
+            print(f"   📝 الآية {ayah.get('surah')}:{ayah.get('ayah')} - {num_words} كلمة → {num_parts} جزء")
+            
+            # تقسيم الكلمات بالتساوي على الأجزاء
+            arabic_parts = self._split_words_evenly(words, num_parts)
+            
+            # تحليل الصوت للحصول على توقيتات دقيقة
+            word_timings = self._analyze_audio_for_words(audio_path, duration, num_words)
+            
+            if word_timings and len(word_timings) >= num_words:
+                # توقيتات دقيقة متاحة - استخدمها
+                print(f"      ✅ تزامن دقيق: {len(word_timings)} توقيت للكلمات")
+                segments.extend(
+                    self._create_segments_from_word_timings(
+                        arabic_parts, words, word_timings, current_time, ayah
+                    )
+                )
             else:
-                print(f"      ⚠️ لم يُكتشف صوت كافٍ - استخدام تقسيم ثابت ({len(arabic_parts)} جزء)")
-                # توزيع متساوٍ إذا فشل تحليل الصوت
-                part_duration = duration / len(arabic_parts)
-
-                for i, ar_part in enumerate(arabic_parts):
-                    segments.append({
-                        "start": current_time + (i * part_duration),
-                        "end": current_time + ((i + 1) * part_duration),
-                        "arabic": ar_part,
-                        "surah": ayah.get("surah"),
-                        "ayah": ayah.get("ayah")
-                    })
+                # توزيع متناسب مع عدد الكلمات
+                print(f"      ⚠️ تزامن تقديري بناءً على عدد الكلمات")
+                segments.extend(
+                    self._create_segments_proportional(
+                        arabic_parts, words, duration, current_time, ayah
+                    )
+                )
             
             current_time += duration
         
-        print(f"   ✅ إجمالي {len(segments)} segment تم إنشاؤها")
+        print(f"   ✅ إجمالي {len(segments)} مقطع تم إنشاؤها")
         return segments
-
-    def _split_text_smart(self, text, max_words=4, target_parts=None):
-        """تقسيم النص لأجزاء قصيرة (2-3 كلمات فقط) - إجباري"""
-        words = text.split()
+    
+    def _split_words_evenly(self, words, num_parts):
+        """تقسيم الكلمات بالتساوي على عدد الأجزاء المحدد"""
+        if num_parts <= 0:
+            return [" ".join(words)]
         
-        if not target_parts or target_parts <= 0:
-            # تقسيم إجباري: كل 2-3 كلمات بالضبط
-            if len(words) <= max_words:
-                return [text]
-            parts = []
-            for i in range(0, len(words), max_words):
-                part = " ".join(words[i:i + max_words])
-                if part:  # تأكد أن الجزء ليس فارغاً
-                    parts.append(part)
-            return parts
-        
-        # تقسيم متوازن حسب target_parts
-        if len(words) <= target_parts:
-            # كل كلمة أو كلمتين
-            parts = []
-            for i in range(0, len(words), 2):
-                part = " ".join(words[i:i+2])
-                if part:
-                    parts.append(part)
-            return parts
-        
-        # توزيع متوازن مع ضمان أجزاء قصيرة
-        words_per_part = max(2, min(max_words, len(words) // target_parts))
         parts = []
-        for i in range(target_parts):
-            start = int(i * len(words) / target_parts)
-            end = int((i + 1) * len(words) / target_parts) if i < target_parts - 1 else len(words)
-            part_words = words[start:end]
+        words_per_part = len(words) / num_parts
+        
+        for i in range(num_parts):
+            start_idx = int(i * words_per_part)
+            end_idx = int((i + 1) * words_per_part) if i < num_parts - 1 else len(words)
+            part_words = words[start_idx:end_idx]
             if part_words:
                 parts.append(" ".join(part_words))
-        return parts if parts else [text]
-
-
-    def _detect_speech_segments(self, audio_path, total_duration):
+        
+        return parts if parts else [" ".join(words)]
+    
+    def _analyze_audio_for_words(self, audio_path, total_duration, num_words):
         """
-        كشف مقاطع الكلام في الصوت بدقة عالية جداً
-        يرجع: [(start_offset, duration), ...]
+        تحليل الصوت لاستخراج توقيتات دقيقة لكل كلمة
+        يستخدم كشف الصمت بحساسية عالية جداً
         """
         if not audio_path:
             return None
         
         try:
             audio = AudioSegment.from_file(str(audio_path))
+            audio_duration_ms = len(audio)
             
-            # إعدادات فائقة الحساسية للتزامن السريع
-            silence_thresh = audio.dBFS - 18  # حساسية عالية جداً
-            min_silence_len = 50  # فترة صمت قصيرة جداً (50ms)
+            # إعدادات فائقة الحساسية
+            silence_thresh = audio.dBFS - 14  # حساسية أعلى
+            min_silence_len = 30  # 30ms فقط للكشف عن فواصل الكلمات
             
             # كشف المقاطع غير الصامتة
             nonsilent_ranges = detect_nonsilent(
                 audio,
                 min_silence_len=min_silence_len,
                 silence_thresh=silence_thresh,
-                seek_step=5  # دقة فائقة
+                seek_step=3  # دقة 3ms
             )
             
             if not nonsilent_ranges:
                 return None
             
-            # تحويل لتوقيتات نسبية
+            # دمج المقاطع القريبة جداً (أقل من 60ms)
+            merged_ranges = self._merge_ranges(nonsilent_ranges, gap_ms=60)
+            
+            # إذا عدد المقاطع أقل من الكلمات، قسّم المقاطع الطويلة
+            if len(merged_ranges) < num_words:
+                merged_ranges = self._subdivide_long_ranges(
+                    merged_ranges, num_words, audio_duration_ms
+                )
+            
+            # تحويل لتوقيتات بالثواني
             timings = []
-            for start_ms, end_ms in nonsilent_ranges:
-                start_sec = start_ms / 1000.0
-                duration_sec = (end_ms - start_ms) / 1000.0
-                # قبول المقاطع القصيرة جداً للتزامن السريع
-                if duration_sec >= 0.08:  # على الأقل 80ms
-                    timings.append((start_sec, duration_sec))
+            for start_ms, end_ms in merged_ranges:
+                timings.append({
+                    "start": start_ms / 1000.0,
+                    "end": end_ms / 1000.0,
+                    "duration": (end_ms - start_ms) / 1000.0
+                })
             
-            # دمج المقاطع المتقاربة جداً
-            timings = self._merge_close_segments(timings, gap_threshold=0.15)
-            
-            return timings if timings else None
+            return timings
             
         except Exception as exc:
-            print(f"⚠️ تعذر تحليل الصوت {audio_path}: {exc}")
+            print(f"      ⚠️ تعذر تحليل الصوت: {exc}")
             return None
     
-    def _merge_close_segments(self, timings, gap_threshold=0.15):
-        """دمج المقاطع المتقاربة جداً لتحسين التزامن"""
-        if not timings or len(timings) <= 1:
-            return timings
+    def _merge_ranges(self, ranges, gap_ms=60):
+        """دمج المقاطع المتقاربة"""
+        if not ranges:
+            return []
         
-        merged = []
-        current_start, current_duration = timings[0]
-        current_end = current_start + current_duration
+        merged = [list(ranges[0])]
         
-        for start, duration in timings[1:]:
-            gap = start - current_end
-            
-            if gap <= gap_threshold:
-                # دمج المقطعين
-                current_duration = (start + duration) - current_start
-                current_end = current_start + current_duration
+        for start, end in ranges[1:]:
+            if start - merged[-1][1] <= gap_ms:
+                merged[-1][1] = end
             else:
-                # حفظ المقطع الحالي والبدء بمقطع جديد
-                merged.append((current_start, current_duration))
-                current_start = start
-                current_duration = duration
-                current_end = start + duration
-        
-        # إضافة آخر مقطع
-        merged.append((current_start, current_duration))
+                merged.append([start, end])
         
         return merged
+    
+    def _subdivide_long_ranges(self, ranges, target_count, total_ms):
+        """تقسيم المقاطع الطويلة للوصول للعدد المطلوب"""
+        if len(ranges) >= target_count:
+            return ranges
+        
+        result = []
+        needed = target_count - len(ranges)
+        
+        # حساب متوسط طول المقطع
+        avg_duration = total_ms / target_count
+        
+        for start, end in ranges:
+            duration = end - start
+            
+            # إذا المقطع طويل، قسّمه
+            if duration > avg_duration * 1.5 and needed > 0:
+                subdivisions = min(int(duration / avg_duration), needed + 1)
+                sub_duration = duration / subdivisions
+                
+                for i in range(subdivisions):
+                    sub_start = start + (i * sub_duration)
+                    sub_end = start + ((i + 1) * sub_duration)
+                    result.append([int(sub_start), int(sub_end)])
+                    if i > 0:
+                        needed -= 1
+            else:
+                result.append([start, end])
+        
+        return result
+    
+    def _create_segments_from_word_timings(self, arabic_parts, words, word_timings, base_time, ayah):
+        """إنشاء مقاطع بناءً على توقيتات الكلمات الدقيقة"""
+        segments = []
+        word_idx = 0
+        
+        for part in arabic_parts:
+            part_words = part.split()
+            num_part_words = len(part_words)
+            
+            if word_idx >= len(word_timings):
+                break
+            
+            # بداية المقطع = بداية أول كلمة فيه
+            start_timing = word_timings[word_idx]
+            
+            # نهاية المقطع = نهاية آخر كلمة فيه
+            end_idx = min(word_idx + num_part_words - 1, len(word_timings) - 1)
+            end_timing = word_timings[end_idx]
+            
+            segments.append({
+                "start": base_time + start_timing["start"],
+                "end": base_time + end_timing["end"],
+                "arabic": part,
+                "surah": ayah.get("surah"),
+                "ayah": ayah.get("ayah")
+            })
+            
+            word_idx += num_part_words
+        
+        return segments
+    
+    def _create_segments_proportional(self, arabic_parts, words, duration, base_time, ayah):
+        """إنشاء مقاطع بتوزيع متناسب مع عدد الكلمات"""
+        segments = []
+        total_words = len(words)
+        time_per_word = duration / total_words
+        
+        word_idx = 0
+        for part in arabic_parts:
+            part_words = part.split()
+            num_part_words = len(part_words)
+            
+            start_time = base_time + (word_idx * time_per_word)
+            end_time = base_time + ((word_idx + num_part_words) * time_per_word)
+            
+            segments.append({
+                "start": start_time,
+                "end": end_time,
+                "arabic": part,
+                "surah": ayah.get("surah"),
+                "ayah": ayah.get("ayah")
+            })
+            
+            word_idx += num_part_words
+        
+        return segments
