@@ -108,8 +108,9 @@
   
   "ai_background": {
     "enabled": true,
-    "provider": "openrouter",
-    "model": "google/gemini-flash-1.5-8b",
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "api_key": "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",
     "max_attempts": 5,
     "temperature": 0.35
   },

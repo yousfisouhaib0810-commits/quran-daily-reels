@@ -82,21 +82,19 @@ def main():
     print(f"   الآيات: {selection['start_ayah']} - {selection['end_ayah']}")
     print(f"   المدة: {selection['total_duration']:.2f} ثانية")
     
-    # ===== 3. جلب النصوص والترجمات =====
-    print("\n📝 جلب النصوص والترجمات...")
-    quran_api = QuranAPI(translation_id=config["sources"]["translation_id"])
+    # ===== 3. جلب النصوص (نص عربي فقط) =====
+    print("\n📝 جلب النصوص... (بدون ترجمة)")
+    quran_api = QuranAPI(translation_id=config["sources"]["translation_id"]) 
     
     ayahs_data = []
     for ayah_info in selection["ayahs"]:
         arabic = quran_api.get_ayah_text(ayah_info["surah"], ayah_info["ayah"])
-        english = quran_api.get_ayah_translation(ayah_info["surah"], ayah_info["ayah"])
         
-        if arabic and english:
+        if arabic:
             ayahs_data.append({
                 "surah": ayah_info["surah"],
                 "ayah": ayah_info["ayah"],
                 "arabic": arabic,
-                "english": english.upper(),
                 "audio_path": ayah_info["audio_path"],
                 "duration": ayah_info["duration"]
             })
@@ -127,23 +125,23 @@ def main():
     advisor_context = {
         "surah": surah_info["name_en"],
         "ayah_range": f"{selection['start_ayah']}-{selection['end_ayah']}",
-        "arabic_preview": " | ".join(a["arabic"] for a in ayahs_data[:3]),
-        "english_preview": " ".join(a["english"].title() for a in ayahs_data)[:800]
+        "arabic_preview": " | ".join(a["arabic"] for a in ayahs_data[:3])
     }
 
     ai_config = config.get("ai_background", {})
     person_config = config.get("person_filter", {})
 
     advisor = None
-    openrouter_key = os.environ.get("OPENROUTER_API_KEY")
-    if ai_config.get("enabled") and openrouter_key:
+    # تفضيل مفتاح من الإعدادات، ثم المتغير البيئي OPENAI_API_KEY
+    ai_key = ai_config.get("api_key") or os.environ.get("OPENAI_API_KEY")
+    if ai_config.get("enabled") and ai_key:
         advisor = BackgroundAdvisor(
-            api_key=openrouter_key,
-            model=ai_config.get("model", "google/gemini-flash-1.5-8b"),
+            api_key=ai_key,
+            model=ai_config.get("model", "gpt-4o-mini"),
             temperature=ai_config.get("temperature", 0.35)
         )
     elif ai_config.get("enabled"):
-        print("   ⚠️ تم تفعيل الذكاء الاصطناعي لكن لم يتم العثور على OPENROUTER_API_KEY")
+        print("   ⚠️ تم تفعيل الذكاء الاصطناعي لكن لم يتم العثور على مفتاح OpenAI (OPENAI_API_KEY أو ai_background.api_key)")
 
     person_detector = None
     if person_config.get("enabled", True):

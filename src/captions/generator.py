@@ -14,15 +14,12 @@ class CaptionGenerator:
         self.video_width = config["video"]["width"]
         self.video_height = config["video"]["height"]
         
-        # إعدادات الخطوط
+        # إعدادات الخطوط (العربية فقط — حذف الترجمة)
         self.arabic_font = config["fonts"]["arabic"]["name"]
         self.arabic_size = config["fonts"]["arabic"]["size"]
-        self.english_font = config["fonts"]["english"]["name"]
-        self.english_size = config["fonts"]["english"]["size"]
         
-        # إعدادات التموضع
+        # إعدادات التموضع (العربية فقط)
         self.arabic_y = int(self.video_height * config["layout"]["arabic_y_percent"] / 100)
-        self.english_gap = config["layout"]["english_gap_px"]
         
         # إعدادات الأنيميشن
         self.fade_in = config["animation"]["fade_in_ms"]
@@ -38,20 +35,19 @@ class CaptionGenerator:
     def _create_header(self):
         """إنشاء رأس ملف ASS"""
         return f"""[Script Info]
-Title: Quran Daily Reel
-ScriptType: v4.00+
-PlayResX: {self.video_width}
-PlayResY: {self.video_height}
-WrapStyle: 0
+    Title: Quran Daily Reel
+    ScriptType: v4.00+
+    PlayResX: {self.video_width}
+    PlayResY: {self.video_height}
+    WrapStyle: 0
 
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Arabic,Amiri,{self.arabic_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,6,4,5,50,50,10,1
-Style: English,Noto Sans,{self.english_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,4,3,5,50,50,10,1
+    [V4+ Styles]
+    Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+    Style: Arabic,Amiri,{self.arabic_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,6,4,5,50,50,10,1
 
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
+    [Events]
+    Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+    """
     
     def _split_long_text(self, text, max_chars=40, is_arabic=True):
         """تقسيم النص الطويل لأسطر متعددة"""
@@ -103,22 +99,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             start_str = self._format_time(start_time)
             end_str = self._format_time(end_time)
             
-            # النص في سطر واحد (بدون تقسيم)
+            # النص العربي فقط (لا ترجمة)
             arabic_text = segment["arabic"]
-            english_text = segment["english"]
-            
-            # حساب موقع Y - العربي في الوسط والإنجليزي تحته
+
+            # حساب موقع Y - العربي في الوسط
             arabic_y = self.arabic_y
-            english_y = arabic_y + self.arabic_size + 50
-            
+
             # إضافة الأنيميشن (fade)
             fade_effect = f"{{\\fad({self.fade_in},{self.fade_out})}}"
-            
-            # سطر النص العربي (سطر واحد)
+
+            # سطر النص العربي
             content += f"Dialogue: 0,{start_str},{end_str},Arabic,,0,0,0,,{{\\pos({self.video_width//2},{arabic_y})}}{fade_effect}{arabic_text}\n"
-            
-            # سطر الترجمة الإنجليزية (سطر واحد تحته)
-            content += f"Dialogue: 0,{start_str},{end_str},English,,0,0,0,,{{\\pos({self.video_width//2},{english_y})}}{fade_effect}{english_text}\n"
         
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -134,13 +125,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         
         for ayah in ayahs_data:
             arabic = ayah["arabic"]
-            english = ayah["english"]
             duration = ayah["duration"]
             audio_path = ayah.get("audio_path")
-            
-            # تقسيم النص إجبارياً لأجزاء قصيرة (2-3 كلمات)
-            arabic_parts = self._split_text_smart(arabic, max_words=3)
-            english_parts = self._redistribute_parts(english, len(arabic_parts))
+
+            # تقسيم النص إجبارياً لأجزاء قصيرة (بحد أقصى 4 كلمات)
+            arabic_parts = self._split_text_smart(arabic, max_words=4)
             
             print(f"   📝 الآية {ayah.get('surah')}:{ayah.get('ayah')} مقسمة إلى {len(arabic_parts)} جزء")
             print(f"      الأجزاء: {arabic_parts[:3]}...")  # أول 3 أجزاء للعرض
@@ -159,19 +148,17 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     english_parts = self._redistribute_parts(english, len(arabic_parts))
                     print(f"      🔄 تم إعادة التوزيع إلى {len(arabic_parts)} جزء")
                 
-                # إنشاء segments بتوقيتات دقيقة
+                # إنشاء segments بتوقيتات دقيقة (نص عربي فقط)
                 for i, (start_offset, part_duration) in enumerate(speech_timings):
                     if i >= len(arabic_parts):
                         break
-                    
+
                     ar_part = arabic_parts[i]
-                    en_part = english_parts[i] if i < len(english_parts) else ""
-                    
+
                     segments.append({
                         "start": current_time + start_offset,
                         "end": current_time + start_offset + part_duration,
                         "arabic": ar_part,
-                        "english": en_part.upper(),
                         "surah": ayah.get("surah"),
                         "ayah": ayah.get("ayah")
                     })
@@ -180,12 +167,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 # توزيع متساوٍ إذا فشل تحليل الصوت
                 part_duration = duration / len(arabic_parts)
                 
-                for i, (ar_part, en_part) in enumerate(zip(arabic_parts, english_parts)):
+                for i, ar_part in enumerate(arabic_parts):
                     segments.append({
                         "start": current_time + (i * part_duration),
                         "end": current_time + ((i + 1) * part_duration),
                         "arabic": ar_part,
-                        "english": en_part.upper(),
                         "surah": ayah.get("surah"),
                         "ayah": ayah.get("ayah")
                     })
