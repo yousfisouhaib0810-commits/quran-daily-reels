@@ -1,6 +1,6 @@
 """
 توليد ملفات الترجمة ASS للفيديو
-تزامن دقيق 100% مع الصوت - بحد أقصى 4 كلمات لكل مقطع
+تزامن دقيق 100% مع صوت القارئ الفعلي
 """
 from pathlib import Path
 from pydub import AudioSegment
@@ -9,7 +9,7 @@ import math
 
 
 class CaptionGenerator:
-    """مولد ترجمات ASS مع تزامن دقيق"""
+    """مولد ترجمات ASS مع تزامن دقيق حسب صوت القارئ"""
     
     MAX_WORDS = 4  # الحد الأقصى للكلمات في كل مقطع
     
@@ -65,49 +65,126 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     
     def create_segments_from_ayahs(self, ayahs_data, padding_before=0.2):
         """
-        إنشاء مقاطع متزامنة بدقة 100%
-        - كل آية تُقسم لأجزاء (بحد أقصى 4 كلمات)
-        - التوقيت يُحسب بناءً على مدة الآية الفعلية
-        - يبدأ النص مع بداية القراءة وينتهي مع نهايتها بالضبط
+        إنشاء مقاطع متزامنة مع صوت القارئ الفعلي
+        - تحليل صوت كل آية لاكتشاف بداية ونهاية القراءة
+        - النص يظهر عند بداية الكلام ويختفي عند نهايته
         """
         segments = []
-        current_time = padding_before  # بداية أول آية بعد الـ padding
+        current_time = padding_before
         
         for ayah in ayahs_data:
             arabic = ayah["arabic"]
-            duration = ayah["duration"]  # المدة الفعلية لهذه الآية
+            duration = ayah["duration"]
             audio_path = ayah.get("audio_path")
             
             words = arabic.split()
             num_words = len(words)
-            
-            # حساب عدد الأجزاء المطلوبة (بحد أقصى 4 كلمات لكل جزء)
             num_parts = math.ceil(num_words / self.MAX_WORDS)
             
-            print(f"   📝 الآية {ayah.get('surah')}:{ayah.get('ayah')} - {num_words} كلمة → {num_parts} جزء")
+            # تحليل الصوت لاكتشاف توقيتات الكلام الفعلية
+            speech_ranges = self._detect_speech_in_audio(audio_path)
             
-            # تقسيم الكلمات بالتساوي على الأجزاء
-            arabic_parts = self._split_words_evenly(words, num_parts)
-            
-            # توزيع متناسب مع عدد الكلمات (أبسط وأدق)
-            # كل جزء يأخذ وقتاً متناسباً مع عدد كلماته
-            ayah_segments = self._create_segments_proportional(
-                arabic_parts, words, duration, current_time, ayah
-            )
-            segments.extend(ayah_segments)
-            
-            # طباعة التوقيتات للتحقق
-            for i, seg in enumerate(ayah_segments):
-                print(f"      [{i+1}] {seg['start']:.2f}s → {seg['end']:.2f}s : {seg['arabic'][:30]}...")
+            if speech_ranges:
+                # بداية ونهاية الكلام الفعلي في هذه الآية
+                speech_start = speech_ranges[0][0]  # بداية أول كلام
+                speech_end = speech_ranges[-1][1]   # نهاية آخر كلام
+                speech_duration = speech_end - speech_start
+                
+                print(f"   📝 الآية {ayah.get('surah')}:{ayah.get('ayah')} - كلام من {speech_start:.2f}s إلى {speech_end:.2f}s")
+                
+                # تقسيم النص
+                arabic_parts = self._split_words_evenly(words, num_parts)
+                
+                # توزيع الأجزاء على مدة الكلام الفعلية
+                time_per_word = speech_duration / num_words
+                word_idx = 0
+                
+                for part in arabic_parts:
+                    part_words = part.split()
+                    num_part_words = len(part_words)
+                    
+                    # التوقيت مبني على الكلام الفعلي
+                    start_time = current_time + speech_start + (word_idx * time_per_word)
+                    end_time = current_time + speech_start + ((word_idx + num_part_words) * time_per_word)
+                    
+                    segments.append({
+                        "start": start_time,
+                        "end": end_time,
+                        "arabic": part,
+                        "surah": ayah.get("surah"),
+                        "ayah": ayah.get("ayah")
+                    })
+                    
+                    print(f"      [{word_idx+1}] {start_time:.2f}s → {end_time:.2f}s")
+                    word_idx += num_part_words
+            else:
+                # fallback: توزيع على كامل المدة
+                print(f"   ⚠️ الآية {ayah.get('surah')}:{ayah.get('ayah')} - تعذر تحليل الصوت")
+                arabic_parts = self._split_words_evenly(words, num_parts)
+                time_per_word = duration / num_words
+                word_idx = 0
+                
+                for part in arabic_parts:
+                    part_words = part.split()
+                    num_part_words = len(part_words)
+                    
+                    start_time = current_time + (word_idx * time_per_word)
+                    end_time = current_time + ((word_idx + num_part_words) * time_per_word)
+                    
+                    segments.append({
+                        "start": start_time,
+                        "end": end_time,
+                        "arabic": part,
+                        "surah": ayah.get("surah"),
+                        "ayah": ayah.get("ayah")
+                    })
+                    word_idx += num_part_words
             
             current_time += duration
         
-        print(f"   ✅ إجمالي {len(segments)} مقطع تم إنشاؤها")
+        print(f"   ✅ إجمالي {len(segments)} مقطع")
         return segments
     
+    def _detect_speech_in_audio(self, audio_path):
+        """
+        تحليل ملف الصوت لاكتشاف متى يبدأ وينتهي الكلام
+        يرجع قائمة من (start_sec, end_sec) للمقاطع الصوتية
+        """
+        if not audio_path:
+            return None
+        
+        try:
+            audio = AudioSegment.from_file(str(audio_path))
+            
+            # إعدادات حساسة لاكتشاف الكلام
+            silence_thresh = audio.dBFS - 16
+            min_silence_len = 100  # 100ms صمت
+            
+            # كشف المقاطع غير الصامتة (الكلام)
+            nonsilent = detect_nonsilent(
+                audio,
+                min_silence_len=min_silence_len,
+                silence_thresh=silence_thresh,
+                seek_step=5
+            )
+            
+            if not nonsilent:
+                return None
+            
+            # تحويل من ميلي ثانية إلى ثواني
+            ranges = []
+            for start_ms, end_ms in nonsilent:
+                ranges.append((start_ms / 1000.0, end_ms / 1000.0))
+            
+            return ranges
+            
+        except Exception as exc:
+            print(f"      ⚠️ خطأ في تحليل الصوت: {exc}")
+            return None
+    
     def _split_words_evenly(self, words, num_parts):
-        """تقسيم الكلمات بالتساوي على عدد الأجزاء المحدد"""
-        if num_parts <= 0 or num_parts == 1:
+        """تقسيم الكلمات بالتساوي"""
+        if num_parts <= 1:
             return [" ".join(words)]
         
         parts = []
@@ -121,38 +198,3 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 parts.append(" ".join(part_words))
         
         return parts if parts else [" ".join(words)]
-    
-    def _create_segments_proportional(self, arabic_parts, words, duration, base_time, ayah):
-        """
-        إنشاء مقاطع بتوزيع متناسب مع عدد الكلمات
-        - كل جزء يأخذ وقتاً يتناسب مع عدد كلماته
-        - البداية والنهاية دقيقة مع الصوت
-        """
-        segments = []
-        total_words = len(words)
-        
-        # حساب الوقت لكل كلمة
-        time_per_word = duration / total_words
-        
-        word_idx = 0
-        for part in arabic_parts:
-            part_words = part.split()
-            num_part_words = len(part_words)
-            
-            # بداية هذا الجزء = بداية الآية + (عدد الكلمات السابقة × وقت الكلمة)
-            start_time = base_time + (word_idx * time_per_word)
-            
-            # نهاية هذا الجزء = بداية + (عدد كلمات هذا الجزء × وقت الكلمة)
-            end_time = base_time + ((word_idx + num_part_words) * time_per_word)
-            
-            segments.append({
-                "start": start_time,
-                "end": end_time,
-                "arabic": part,
-                "surah": ayah.get("surah"),
-                "ayah": ayah.get("ayah")
-            })
-            
-            word_idx += num_part_words
-        
-        return segments
