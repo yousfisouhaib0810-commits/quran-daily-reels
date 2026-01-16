@@ -252,20 +252,21 @@ def main():
             # تجهيز العنوان والوصف
             surah_name = surah_info["name"]
             ayah_range = f"{selection['start_ayah']}-{selection['end_ayah']}"
-            title = f"{surah_name} | آية {ayah_range} | {reciter['name']}"
+            title = f"{surah_name} | آية {ayah_range} | {reciter['name']} #Shorts"
             
             description = f"""تلاوة خاشعة من سورة {surah_name}
 الآيات: {ayah_range}
 القارئ: {reciter['name']}
 
-#قرآن #تلاوة #Quran #Recitation #{surah_info['name_en'].replace(' ', '')}"""
+#Shorts #قرآن #تلاوة #Quran #Recitation #{surah_info['name_en'].replace(' ', '')}"""
             
             print(f"   📤 جاري رفع الفيديو: {title}")
             result = youtube.upload_video(
                 final_video,
                 title=title,
                 description=description,
-                tags=["قرآن", "تلاوة", "Quran", reciter['name'], surah_info['name_en']],
+                tags=["Shorts", "قرآن", "تلاوة", "Quran", reciter['name'], surah_info['name_en']],
+                category_id="22",
                 privacy_status="public"
             )
             print(f"   ✅ YouTube: {result['url']}")
