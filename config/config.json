@@ -15,7 +15,7 @@
   },
   
   "timing": {
-    "min_duration_seconds": 15,
+    "min_duration_seconds": 20,
     "padding_before_ms": 200,
     "padding_after_ms": 200,
     "allow_short_end_of_surah": true
