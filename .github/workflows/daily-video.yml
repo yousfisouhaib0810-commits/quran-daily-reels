@@ -55,18 +55,25 @@ jobs:
           restore-keys: |
             quran-bot-state-
       
-      # 7. تشغيل البوت
+      # 7. إعداد YouTube credentials
+      - name: Setup YouTube credentials
+        if: ${{ secrets.YOUTUBE_CLIENT_SECRETS != '' }}
+        env:
+          YOUTUBE_CLIENT_SECRETS: ${{ secrets.YOUTUBE_CLIENT_SECRETS }}
+        run: |
+          echo "$YOUTUBE_CLIENT_SECRETS" > config/youtube_credentials.json
+      
+      # 8. تشغيل البوت
       - name: Generate video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
-          YOUTUBE_ENABLED: ${{ secrets.YOUTUBE_ENABLED }}
-          YOUTUBE_CLIENT_SECRETS: ${{ secrets.YOUTUBE_CLIENT_SECRETS }}
+          YOUTUBE_ENABLED: "true"
         run: |
           python main.py
       
-      # 8. حفظ الحالة
+      # 9. حفظ الحالة
       - name: Save state
         uses: actions/cache/save@v4
         if: always()
@@ -76,7 +83,7 @@ jobs:
             data/audio/
           key: quran-bot-state-${{ github.run_number }}
       
-      # 9. رفع الفيديو كـ artifact (احتياطي)
+      # 10. رفع الفيديو كـ artifact (احتياطي)
       - name: Upload video artifact
         uses: actions/upload-artifact@v4
         with:
@@ -84,7 +91,7 @@ jobs:
           path: output/*.mp4
           retention-days: 7
       
-      # 10. Commit state changes
+      # 11. Commit state changes
       - name: Commit state changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
