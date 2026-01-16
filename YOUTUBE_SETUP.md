@@ -1,5 +1,7 @@
 # دليل إعداد النشر اليومي التلقائي على YouTube
 
+## ⚠️ مهم: يجب إكمال هذه الخطوات لتفعيل النشر التلقائي على YouTube
+
 ## الخطوات المطلوبة:
 
 ### 1. إعداد YouTube API
@@ -16,38 +18,56 @@
    - اضغط "Create Credentials" > "OAuth 2.0 Client ID"
    - اختر نوع التطبيق: "Desktop app"
    - سمّه "Quran Daily Bot"
-   - احفظ الملف JSON
+   - نزّل الملف JSON واحفظه باسم `client_secret.json` في مجلد المشروع
 
-5. أنشئ Refresh Token:
-   ```bash
-   # شغل هذا محلياً مرة واحدة
-   python setup_youtube_auth.py
-   ```
-   سيفتح متصفح للتصريح - سجل دخول بحساب YouTube الخاص بك
+### 2. إنشاء YouTube Token (مرة واحدة فقط)
 
-### 2. إضافة Secrets في GitHub
+قم بتشغيل السكريبت التالي على جهازك المحلي:
 
-اذهب إلى مستودع GitHub → Settings → Secrets and variables → Actions → New repository secret:
+```bash
+python setup_youtube_auth.py
+```
 
-1. **OPENAI_API_KEY**: مفتاح OpenAI (موجود مسبقاً)
-2. **PEXELS_API_KEY**: مفتاح Pexels (موجود مسبقاً)
-3. **YOUTUBE_ENABLED**: ضع القيمة `true`
-4. **YOUTUBE_CLIENT_SECRETS**: الصق محتوى ملف الـ OAuth JSON بالكامل
+**ماذا سيحدث:**
+1. سيفتح متصفح تلقائياً
+2. سجل دخول بحساب YouTube الذي تريد النشر عليه
+3. اقبل الصلاحيات المطلوبة
+4. السكريبت سيطبع لك JSON يحتوي على refresh token
+5. **انسخ هذا JSON** - ستحتاجه في الخطوة التالية
 
-### 3. الجدولة التلقائية
+### 3. إضافة Secrets في GitHub
+
+اذهب إلى مستودع GitHub → Settings → Secrets and variables → Actions:
+
+**Secrets المطلوبة:**
+
+1. **YOUTUBE_TOKEN** (جديد - مهم!):
+   - الصق JSON الذي حصلت عليه من الخطوة السابقة
+   - هذا يحتوي على refresh token للمصادقة التلقائية
+
+2. **YOUTUBE_ENABLED**: 
+   - القيمة: `true`
+
+3. Secrets الموجودة مسبقاً:
+   - ✅ OPENAI_API_KEY
+   - ✅ PEXELS_API_KEY
+   - ✅ GOOGLE_CREDENTIALS
+   - ✅ GOOGLE_DRIVE_FOLDER_ID
+
+### 4. الجدولة التلقائية
 
 الـ workflow الآن مضبوط على:
 - **التوقيت**: 6:00 صباحاً بتوقيت الجزائر (UTC+1)
 - **التكرار**: يومياً
 - **cron**: `0 5 * * *`
 
-### 4. التشغيل اليدوي (اختبار)
+### 5. التشغيل اليدوي (اختبار)
 
 يمكنك تشغيل البوت يدوياً:
 - اذهب إلى GitHub → Actions → Daily Quran Reel Generator
 - اضغط "Run workflow"
 
-### 5. ما يحدث تلقائياً كل يوم:
+### 6. ما يحدث تلقائياً كل يوم:
 
 1. ✅ يختار قارئ عشوائي
 2. ✅ يختار آيات قرآنية (استكمال من الموقع السابق)

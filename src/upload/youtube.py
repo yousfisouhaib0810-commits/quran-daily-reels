@@ -3,10 +3,15 @@
 """
 import os
 import json
+import pickle
 from pathlib import Path
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+
+SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
 
 class YouTubeUploader:
@@ -18,25 +23,52 @@ class YouTubeUploader:
     
     def authenticate(self):
         """المصادقة مع YouTube API"""
-        # قراءة client secrets من متغير البيئة أو ملف
-        client_secrets_json = os.environ.get("YOUTUBE_CLIENT_SECRETS")
+        token_file = Path("config/youtube_token.pickle")
         
-        if client_secrets_json:
-            # من متغير البيئة (GitHub Actions)
-            client_info = json.loads(client_secrets_json)
-            self.credentials = Credentials.from_authorized_user_info(client_info)
-        else:
-            # من ملف محلي
-            creds_file = Path("config/youtube_credentials.json")
-            if creds_file.exists():
-                with open(creds_file, 'r') as f:
-                    client_info = json.load(f)
-                self.credentials = Credentials.from_authorized_user_info(client_info)
+        # محاولة تحميل token محفوظ
+        if token_file.exists():
+            with open(token_file, 'rb') as f:
+                self.credentials = pickle.load(f)
+        
+        # إذا لم يكن هناك credentials صالحة، حاول من متغير البيئة
+        if not self.credentials or not self.credentials.valid:
+            if self.credentials and self.credentials.expired and self.credentials.refresh_token:
+                print("   🔄 تحديث YouTube token...")
+                self.credentials.refresh(Request())
             else:
-                raise FileNotFoundError(
-                    "لم يتم العثور على بيانات اعتماد YouTube. "
-                    "يرجى إعداد YOUTUBE_CLIENT_SECRETS أو config/youtube_credentials.json"
-                )
+                # محاولة قراءة من متغير البيئة للـ GitHub Actions
+                youtube_token = os.environ.get("YOUTUBE_TOKEN")
+                if youtube_token:
+                    token_info = json.loads(youtube_token)
+                    self.credentials = Credentials(
+                        token=token_info.get('token'),
+                        refresh_token=token_info.get('refresh_token'),
+                        token_uri=token_info.get('token_uri', 'https://oauth2.googleapis.com/token'),
+                        client_id=token_info.get('client_id'),
+                        client_secret=token_info.get('client_secret'),
+                        scopes=SCOPES
+                    )
+                else:
+                    # OAuth flow للمصادقة المحلية
+                    client_secrets = os.environ.get("YOUTUBE_CLIENT_SECRETS")
+                    if client_secrets:
+                        client_info = json.loads(client_secrets)
+                    else:
+                        creds_file = Path("config/youtube_client_secrets.json")
+                        if not creds_file.exists():
+                            raise FileNotFoundError(
+                                "لم يتم العثور على بيانات YouTube. "
+                                "يرجى تشغيل setup_youtube_auth.py أو تعيين YOUTUBE_TOKEN"
+                            )
+                        with open(creds_file, 'r') as f:
+                            client_info = json.load(f)
+                    
+                    flow = InstalledAppFlow.from_client_config(client_info, SCOPES)
+                    self.credentials = flow.run_local_server(port=0)
+                
+                # حفظ token للاستخدام القادم
+                with open(token_file, 'wb') as f:
+                    pickle.dump(self.credentials, f)
         
         self.youtube = build('youtube', 'v3', credentials=self.credentials)
     

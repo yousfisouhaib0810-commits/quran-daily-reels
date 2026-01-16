@@ -3,6 +3,7 @@
 """
 import os
 import json
+import pickle
 from pathlib import Path
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -30,12 +31,13 @@ def setup_youtube_credentials():
         return
     
     creds = None
-    token_file = Path("config/youtube_credentials.json")
+    token_file = Path("config/youtube_token.pickle")
     token_file.parent.mkdir(parents=True, exist_ok=True)
     
     # التحقق من وجود token سابق
     if token_file.exists():
-        creds = Credentials.from_authorized_user_file(str(token_file), SCOPES)
+        with open(token_file, 'rb') as f:
+            creds = pickle.load(f)
     
     # إذا لا يوجد credentials صالح
     if not creds or not creds.valid:
@@ -51,9 +53,9 @@ def setup_youtube_credentials():
             )
             creds = flow.run_local_server(port=0)
         
-        # حفظ الـ credentials
-        with open(token_file, 'w') as f:
-            f.write(creds.to_json())
+        # حفظ الـ credentials كـ pickle
+        with open(token_file, 'wb') as f:
+            pickle.dump(creds, f)
         
         print(f"\n✅ تم حفظ الـ credentials في: {token_file}")
     
@@ -61,19 +63,27 @@ def setup_youtube_credentials():
     print("\n" + "="*50)
     print("📋 معلومات GitHub Secret:")
     print("="*50)
-    print("\nSecret Name: YOUTUBE_CLIENT_SECRETS")
+    print("\nSecret Name: YOUTUBE_TOKEN")
     print("\nSecret Value (انسخ هذا):\n")
     
-    with open(token_file, 'r') as f:
-        print(f.read())
+    token_data = {
+        'token': creds.token,
+        'refresh_token': creds.refresh_token,
+        'token_uri': creds.token_uri,
+        'client_id': creds.client_id,
+        'client_secret': creds.client_secret,
+        'scopes': creds.scopes
+    }
+    
+    print(json.dumps(token_data, indent=2))
     
     print("\n" + "="*50)
     print("\n✅ الآن:")
-    print("   1. انسخ المحتوى أعلاه")
+    print("   1. انسخ JSON أعلاه")
     print("   2. اذهب إلى GitHub Repository → Settings → Secrets")
-    print("   3. أنشئ Secret باسم: YOUTUBE_CLIENT_SECRETS")
+    print("   3. أنشئ Secret باسم: YOUTUBE_TOKEN")
     print("   4. الصق المحتوى المنسوخ")
-    print("   5. ضع Secret آخر: YOUTUBE_ENABLED = true")
+    print("   5. تأكد أن YOUTUBE_ENABLED = true موجود")
     print("="*50)
 
 
