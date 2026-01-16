@@ -55,7 +55,6 @@
   
   "reciters": [
     {"id": "Abdurrahmaan_As-Sudais_64kbps", "name": "عبد الرحمن السديس"},
-    {"id": "Mishary_Rashid_Alafasy_64kbps", "name": "مشاري راشد العفاسي"},
     {"id": "Ghamadi_40kbps", "name": "سعد الغامدي"},
     {"id": "Abu_Bakr_Ash-Shaatree_64kbps", "name": "أبو بكر الشاطري"},
     {"id": "Yasser_Ad-Dussary_128kbps", "name": "ياسر الدوسري"},
@@ -64,14 +63,10 @@
     {"id": "Sahl_Yassin_128kbps", "name": "سهل ياسين"},
     {"id": "Ali_Jaber_64kbps", "name": "علي جابر"},
     {"id": "Fares_Abbad_64kbps", "name": "فارس عباد"},
-    {"id": "Khalid_Abdullah_al-Qahtanee_64kbps", "name": "خالد عبد الله القحطاني"},
-    {"id": "Mahmoud_Ali_Al-Banna_64kbps", "name": "محمود علي البنا"},
     {"id": "Muhammad_Ayyoub_64kbps", "name": "محمد أيوب"},
     {"id": "Muhammad_Jibreel_64kbps", "name": "محمد جبريل"},
-    {"id": "Muhammad_AbdulKareem_64kbps", "name": "محمد عبد الكريم"},
-    {"id": "Mohsin_Al-Qasim_128kbps", "name": "محسن القاسم"},
     {"id": "Salah_Al_Budair_128kbps", "name": "صلاح البدير"},
-    {"id": "Salaah_AbdulRahman_Bukhatir_128kbps", "name": "صلاة عبد الرحمن بوخاطر"}
+    {"id": "Salaah_AbdulRahman_Bukhatir_128kbps", "name": "صلاح عبد الرحمن بوخاطر"}
   ],
   
   "sources": {
