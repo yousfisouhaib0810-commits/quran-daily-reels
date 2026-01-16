@@ -27,6 +27,7 @@ class YouTubeUploader:
         
         # محاولة تحميل token محفوظ
         if token_file.exists():
+            print(f"   📁 تحميل token من: {token_file}")
             with open(token_file, 'rb') as f:
                 self.credentials = pickle.load(f)
         
@@ -39,6 +40,7 @@ class YouTubeUploader:
                 # محاولة قراءة من متغير البيئة للـ GitHub Actions
                 youtube_token = os.environ.get("YOUTUBE_TOKEN")
                 if youtube_token:
+                    print("   🔑 استخدام YOUTUBE_TOKEN من متغير البيئة")
                     token_info = json.loads(youtube_token)
                     self.credentials = Credentials(
                         token=token_info.get('token'),
@@ -48,8 +50,10 @@ class YouTubeUploader:
                         client_secret=token_info.get('client_secret'),
                         scopes=SCOPES
                     )
+                    print("   ✅ تم إنشاء credentials من YOUTUBE_TOKEN")
                 else:
                     # OAuth flow للمصادقة المحلية
+                    print("   ⚠️ لم يتم العثور على YOUTUBE_TOKEN")
                     client_secrets = os.environ.get("YOUTUBE_CLIENT_SECRETS")
                     if client_secrets:
                         client_info = json.loads(client_secrets)
@@ -69,8 +73,11 @@ class YouTubeUploader:
                 # حفظ token للاستخدام القادم
                 with open(token_file, 'wb') as f:
                     pickle.dump(self.credentials, f)
+                print(f"   💾 تم حفظ token في: {token_file}")
         
+        print("   🏗️ إنشاء YouTube API client...")
         self.youtube = build('youtube', 'v3', credentials=self.credentials)
+        print("   ✅ تمت المصادقة بنجاح!")
     
     def upload_video(self, video_path, title, description="", tags=None, category_id="22", privacy_status="public"):
         """

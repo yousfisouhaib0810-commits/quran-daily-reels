@@ -241,8 +241,11 @@ def main():
     
     # رفع إلى YouTube
     youtube_enabled = os.environ.get("YOUTUBE_ENABLED", "false").lower() == "true"
+    print(f"\n📺 YouTube Upload Status: YOUTUBE_ENABLED={youtube_enabled}")
+    
     if youtube_enabled:
         try:
+            print("   🔐 جاري المصادقة مع YouTube...")
             youtube = YouTubeUploader()
             youtube.authenticate()
             
@@ -257,6 +260,7 @@ def main():
 
 #قرآن #تلاوة #Quran #Recitation #{surah_info['name_en'].replace(' ', '')}"""
             
+            print(f"   📤 جاري رفع الفيديو: {title}")
             result = youtube.upload_video(
                 final_video,
                 title=title,
@@ -266,7 +270,11 @@ def main():
             )
             print(f"   ✅ YouTube: {result['url']}")
         except Exception as e:
-            print(f"   ⚠️ فشل رفع YouTube: {e}")
+            print(f"   ❌ فشل رفع YouTube: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print("   ⚠️ YouTube upload معطل (YOUTUBE_ENABLED != true)")
     
     # ===== 9. تحديث الحالة =====
     print("\n💾 تحديث الحالة...")
