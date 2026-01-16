@@ -7,11 +7,11 @@
   "video": {
     "width": 1080,
     "height": 1920,
-    "fps": 30,
-    "bitrate": "8M",
+    "fps": 60,
+    "bitrate": "12M",
     "codec": "libx264",
-    "preset": "slow",
-    "audio_bitrate": "256k"
+    "preset": "slower",
+    "audio_bitrate": "320k"
   },
   
   "timing": {
@@ -25,7 +25,7 @@
     "arabic": {
       "name": "Amiri Quran",
       "file": "AmiriQuran-Regular.ttf",
-      "size": 200,
+      "size": 220,
       "color": "#FFFFFF"
     },
     "english": {

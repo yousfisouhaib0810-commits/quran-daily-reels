@@ -11,7 +11,7 @@ import math
 class CaptionGenerator:
     """مولد ترجمات ASS مع تزامن دقيق حسب صوت القارئ"""
     
-    MAX_WORDS = 4  # الحد الأقصى للكلمات في كل مقطع
+    MAX_WORDS = 3  # الحد الأقصى للكلمات في كل مقطع - أقل لدقة أعلى
     
     def __init__(self, config):
         self.config = config
@@ -65,9 +65,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     
     def create_segments_from_ayahs(self, ayahs_data, padding_before=0.2):
         """
-        إنشاء مقاطع متزامنة مع صوت القارئ الفعلي
+        إنشاء مقاطع متزامنة مع صوت القارئ الفعلي بدقة عالية جداً
         - تحليل صوت كل آية لاكتشاف بداية ونهاية القراءة
-        - النص يظهر عند بداية الكلام ويختفي عند نهايته
+        - تقسيم النص حسب مقاطع الصوت الفعلية
+        - النص يظهر ويختفي بدقة مع صوت القارئ
         """
         segments = []
         current_time = padding_before
@@ -79,71 +80,143 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             
             words = arabic.split()
             num_words = len(words)
-            num_parts = math.ceil(num_words / self.MAX_WORDS)
             
-            # تحليل الصوت لاكتشاف توقيتات الكلام الفعلية
+            # تحليل الصوت لاكتشاف توقيتات الكلام الفعلية بدقة millisecond
             speech_ranges = self._detect_speech_in_audio(audio_path)
             
-            if speech_ranges:
-                # بداية ونهاية الكلام الفعلي في هذه الآية
-                speech_start = speech_ranges[0][0]  # بداية أول كلام
-                speech_end = speech_ranges[-1][1]   # نهاية آخر كلام
+            if speech_ranges and len(speech_ranges) > 0:
+                # دمج المقاطع المتقاربة جداً (أقل من 100ms)
+                merged_ranges = self._merge_close_ranges(speech_ranges, gap_threshold=0.1)
+                
+                speech_start = merged_ranges[0][0]
+                speech_end = merged_ranges[-1][1]
                 speech_duration = speech_end - speech_start
                 
-                print(f"   📝 الآية {ayah.get('surah')}:{ayah.get('ayah')} - كلام من {speech_start:.2f}s إلى {speech_end:.2f}s")
+                print(f"   📝 الآية {ayah.get('surah')}:{ayah.get('ayah')} - {len(merged_ranges)} مقطع صوتي")
+                print(f"      الكلام من {speech_start:.3f}s إلى {speech_end:.3f}s")
                 
-                # تقسيم النص
-                arabic_parts = self._split_words_evenly(words, num_parts)
-                
-                # توزيع الأجزاء على مدة الكلام الفعلية
-                time_per_word = speech_duration / num_words
-                word_idx = 0
-                
-                for part in arabic_parts:
-                    part_words = part.split()
-                    num_part_words = len(part_words)
+                # إذا كان عندنا مقاطع صوتية متعددة، نوزع الكلمات عليها
+                if len(merged_ranges) >= 2:
+                    # توزيع ذكي: كل مقطع صوتي = segment
+                    word_idx = 0
+                    for i, (range_start, range_end) in enumerate(merged_ranges):
+                        range_duration = range_end - range_start
+                        # عدد الكلمات لهذا المقطع حسب نسبة المدة
+                        words_for_this_range = max(1, int((range_duration / speech_duration) * num_words))
+                        
+                        if word_idx >= num_words:
+                            break
+                        
+                        # أخذ الكلمات لهذا المقطع
+                        end_word_idx = min(word_idx + words_for_this_range, num_words)
+                        if i == len(merged_ranges) - 1:  # آخر مقطع يأخذ الباقي
+                            end_word_idx = num_words
+                        
+                        segment_words = words[word_idx:end_word_idx]
+                        
+                        # لكن لا نتجاوز MAX_WORDS
+                        if len(segment_words) > self.MAX_WORDS:
+                            # نقسمها لعدة segments
+                            num_parts = math.ceil(len(segment_words) / self.MAX_WORDS)
+                            time_per_word = range_duration / len(segment_words)
+                            
+                            for j in range(num_parts):
+                                start_idx = j * self.MAX_WORDS
+                                end_idx = min((j + 1) * self.MAX_WORDS, len(segment_words))
+                                part_words = segment_words[start_idx:end_idx]
+                                
+                                part_start = current_time + range_start + (start_idx * time_per_word)
+                                part_end = current_time + range_start + (end_idx * time_per_word)
+                                
+                                segments.append({
+                                    "start": part_start,
+                                    "end": part_end,
+                                    "arabic": " ".join(part_words),
+                                    "surah": ayah.get("surah"),
+                                    "ayah": ayah.get("ayah")
+                                })
+                                print(f"      ✓ {part_start:.3f}s → {part_end:.3f}s: {' '.join(part_words)}")
+                        else:
+                            segments.append({
+                                "start": current_time + range_start,
+                                "end": current_time + range_end,
+                                "arabic": " ".join(segment_words),
+                                "surah": ayah.get("surah"),
+                                "ayah": ayah.get("ayah")
+                            })
+                            print(f"      ✓ {current_time + range_start:.3f}s → {current_time + range_end:.3f}s: {' '.join(segment_words)}")
+                        
+                        word_idx = end_word_idx
+                else:
+                    # مقطع صوتي واحد: نقسم الكلمات بالتساوي
+                    num_parts = math.ceil(num_words / self.MAX_WORDS)
+                    time_per_word = speech_duration / num_words
                     
-                    # التوقيت مبني على الكلام الفعلي
-                    start_time = current_time + speech_start + (word_idx * time_per_word)
-                    end_time = current_time + speech_start + ((word_idx + num_part_words) * time_per_word)
-                    
-                    segments.append({
-                        "start": start_time,
-                        "end": end_time,
-                        "arabic": part,
-                        "surah": ayah.get("surah"),
-                        "ayah": ayah.get("ayah")
-                    })
-                    
-                    print(f"      [{word_idx+1}] {start_time:.2f}s → {end_time:.2f}s")
-                    word_idx += num_part_words
+                    for i in range(num_parts):
+                        start_idx = i * self.MAX_WORDS
+                        end_idx = min((i + 1) * self.MAX_WORDS, num_words)
+                        part_words = words[start_idx:end_idx]
+                        
+                        part_start = current_time + speech_start + (start_idx * time_per_word)
+                        part_end = current_time + speech_start + (end_idx * time_per_word)
+                        
+                        segments.append({
+                            "start": part_start,
+                            "end": part_end,
+                            "arabic": " ".join(part_words),
+                            "surah": ayah.get("surah"),
+                            "ayah": ayah.get("ayah")
+                        })
+                        print(f"      ✓ {part_start:.3f}s → {part_end:.3f}s: {' '.join(part_words)}")
             else:
                 # fallback: توزيع على كامل المدة
                 print(f"   ⚠️ الآية {ayah.get('surah')}:{ayah.get('ayah')} - تعذر تحليل الصوت")
-                arabic_parts = self._split_words_evenly(words, num_parts)
+                num_parts = math.ceil(num_words / self.MAX_WORDS)
                 time_per_word = duration / num_words
-                word_idx = 0
                 
-                for part in arabic_parts:
-                    part_words = part.split()
-                    num_part_words = len(part_words)
+                for i in range(num_parts):
+                    start_idx = i * self.MAX_WORDS
+                    end_idx = min((i + 1) * self.MAX_WORDS, num_words)
+                    part_words = words[start_idx:end_idx]
                     
-                    start_time = current_time + (word_idx * time_per_word)
-                    end_time = current_time + ((word_idx + num_part_words) * time_per_word)
+                    part_start = current_time + (start_idx * time_per_word)
+                    part_end = current_time + (end_idx * time_per_word)
                     
                     segments.append({
-                        "start": start_time,
-                        "end": end_time,
-                        "arabic": part,
+                        "start": part_start,
+                        "end": part_end,
+                        "arabic": " ".join(part_words),
                         "surah": ayah.get("surah"),
                         "ayah": ayah.get("ayah")
                     })
-                    word_idx += num_part_words
             
             current_time += duration
         
-        print(f"   ✅ إجمالي {len(segments)} مقطع")
+        print(f"   ✅ إجمالي {len(segments)} مقطع بدقة millisecond")
         return segments
+    
+    def _merge_close_ranges(self, ranges, gap_threshold=0.1):
+        """
+        دمج المقاطع الصوتية المتقاربة جداً
+        gap_threshold: الفجوة بالثواني (0.1 = 100ms)
+        """
+        if not ranges or len(ranges) <= 1:
+            return ranges
+        
+        merged = []
+        current_start, current_end = ranges[0]
+        
+        for start, end in ranges[1:]:
+            if start - current_end <= gap_threshold:
+                # دمج
+                current_end = end
+            else:
+                # حفظ المقطع الحالي وبدء مقطع جديد
+                merged.append((current_start, current_end))
+                current_start, current_end = start, end
+        
+        merged.append((current_start, current_end))
+        return merged
     
     def _detect_speech_in_audio(self, audio_path):
         """
@@ -156,16 +229,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         try:
             audio = AudioSegment.from_file(str(audio_path))
             
-            # إعدادات حساسة لاكتشاف الكلام
-            silence_thresh = audio.dBFS - 16
-            min_silence_len = 100  # 100ms صمت
+            # إعدادات دقيقة جداً لاكتشاف الكلام (بالأجزاء من الثانية)
+            silence_thresh = audio.dBFS - 14  # أكثر حساسية
+            min_silence_len = 50  # 50ms صمت - دقة مضاعفة
             
-            # كشف المقاطع غير الصامتة (الكلام)
+            # كشف المقاطع غير الصامتة (الكلام) بدقة عالية
             nonsilent = detect_nonsilent(
                 audio,
                 min_silence_len=min_silence_len,
                 silence_thresh=silence_thresh,
-                seek_step=5
+                seek_step=1  # مسح كل 1ms لدقة قصوى
             )
             
             if not nonsilent:
