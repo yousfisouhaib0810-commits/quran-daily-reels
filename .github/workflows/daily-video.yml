@@ -57,11 +57,12 @@ jobs:
       
       # 7. إعداد YouTube credentials
       - name: Setup YouTube credentials
-        if: ${{ secrets.YOUTUBE_CLIENT_SECRETS != '' }}
         env:
           YOUTUBE_CLIENT_SECRETS: ${{ secrets.YOUTUBE_CLIENT_SECRETS }}
         run: |
-          echo "$YOUTUBE_CLIENT_SECRETS" > config/youtube_credentials.json
+          if [ -n "$YOUTUBE_CLIENT_SECRETS" ]; then
+            echo "$YOUTUBE_CLIENT_SECRETS" > config/youtube_credentials.json
+          fi
       
       # 8. تشغيل البوت
       - name: Generate video
