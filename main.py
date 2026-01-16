@@ -135,7 +135,15 @@ def main():
     advisor = None
     # تفضيل مفتاح من الإعدادات، ثم المتغير البيئي OPENAI_API_KEY
     ai_key = ai_config.get("api_key") or os.environ.get("OPENAI_API_KEY")
+    
+    print(f"   🤖 إعدادات الذكاء الاصطناعي:")
+    print(f"      Enabled: {ai_config.get('enabled')}")
+    print(f"      Provider: {ai_config.get('provider')}")
+    print(f"      Model: {ai_config.get('model')}")
+    print(f"      API Key: {'✅ موجود' if ai_key else '❌ غير موجود'}")
+    
     if ai_config.get("enabled") and ai_key:
+        print(f"   ✅ تفعيل الذكاء الاصطناعي لاختيار الخلفية...")
         advisor = BackgroundAdvisor(
             api_key=ai_key,
             model=ai_config.get("model", "gpt-4o-mini"),
