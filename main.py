@@ -24,6 +24,7 @@ from src.ai.background_advisor import BackgroundAdvisor
 from src.detection.person_detector import PersonDetector
 from src.render.renderer import VideoRenderer
 from src.upload.drive import GoogleDriveUploader
+from src.upload.youtube import YouTubeUploader
 
 
 def load_config():
@@ -219,9 +220,10 @@ def main():
         output_filename=output_filename
     )
     
-    # ===== 8. رفع إلى Google Drive =====
-    print("\n☁️ رفع إلى Google Drive...")
+    # ===== 8. رفع إلى Google Drive و YouTube =====
+    print("\n☁️ رفع الفيديو...")
     
+    # رفع إلى Google Drive
     if config["google_drive"]["enabled"]:
         try:
             drive = GoogleDriveUploader()
@@ -233,11 +235,38 @@ def main():
                 final_video,
                 folder_id=folder_id if folder_id != "YOUR_GOOGLE_DRIVE_FOLDER_ID" else None
             )
-            print(f"   ✅ تم الرفع: {result['link']}")
+            print(f"   ✅ Google Drive: {result['link']}")
         except Exception as e:
-            print(f"   ⚠️ فشل الرفع: {e}")
-    else:
-        print("   ⏭️ الرفع معطل")
+            print(f"   ⚠️ فشل رفع Google Drive: {e}")
+    
+    # رفع إلى YouTube
+    youtube_enabled = os.environ.get("YOUTUBE_ENABLED", "false").lower() == "true"
+    if youtube_enabled:
+        try:
+            youtube = YouTubeUploader()
+            youtube.authenticate()
+            
+            # تجهيز العنوان والوصف
+            surah_name = surah_info["name"]
+            ayah_range = f"{selection['start_ayah']}-{selection['end_ayah']}"
+            title = f"{surah_name} | آية {ayah_range} | {reciter['name']}"
+            
+            description = f"""تلاوة خاشعة من سورة {surah_name}
+الآيات: {ayah_range}
+القارئ: {reciter['name']}
+
+#قرآن #تلاوة #Quran #Recitation #{surah_info['name_en'].replace(' ', '')}"""
+            
+            result = youtube.upload_video(
+                final_video,
+                title=title,
+                description=description,
+                tags=["قرآن", "تلاوة", "Quran", reciter['name'], surah_info['name_en']],
+                privacy_status="public"
+            )
+            print(f"   ✅ YouTube: {result['url']}")
+        except Exception as e:
+            print(f"   ⚠️ فشل رفع YouTube: {e}")
     
     # ===== 9. تحديث الحالة =====
     print("\n💾 تحديث الحالة...")

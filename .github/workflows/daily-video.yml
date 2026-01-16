@@ -1,9 +1,9 @@
 name: Daily Quran Reel Generator
 
 on:
-  # جدولة يومية - 6 صباحاً بتوقيت السعودية (3:00 UTC)
+  # جدولة يومية - 6 صباحاً بتوقيت الجزائر (5:00 UTC)
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 5 * * *'
   
   # تشغيل يدوي للاختبار
   workflow_dispatch:
@@ -59,8 +59,10 @@ jobs:
       - name: Generate video
         env:
           PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
+          YOUTUBE_ENABLED: ${{ secrets.YOUTUBE_ENABLED }}
+          YOUTUBE_CLIENT_SECRETS: ${{ secrets.YOUTUBE_CLIENT_SECRETS }}
         run: |
           python main.py
       
