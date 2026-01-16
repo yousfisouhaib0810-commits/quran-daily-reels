@@ -35,25 +35,46 @@ class YouTubeUploader:
         if not self.credentials or not self.credentials.valid:
             if self.credentials and self.credentials.expired and self.credentials.refresh_token:
                 print("   🔄 تحديث YouTube token...")
-                self.credentials.refresh(Request())
-            else:
+                try:
+                    self.credentials.refresh(Request())
+                    print("   ✅ تم تحديث token بنجاح")
+                except Exception as e:
+                    print(f"   ⚠️ فشل تحديث token: {e}")
+                    self.credentials = None
+            
+            if not self.credentials:
                 # محاولة قراءة من متغير البيئة للـ GitHub Actions
                 youtube_token = os.environ.get("YOUTUBE_TOKEN")
                 if youtube_token:
                     print("   🔑 استخدام YOUTUBE_TOKEN من متغير البيئة")
-                    token_info = json.loads(youtube_token)
-                    self.credentials = Credentials(
-                        token=token_info.get('token'),
-                        refresh_token=token_info.get('refresh_token'),
-                        token_uri=token_info.get('token_uri', 'https://oauth2.googleapis.com/token'),
-                        client_id=token_info.get('client_id'),
-                        client_secret=token_info.get('client_secret'),
-                        scopes=SCOPES
-                    )
-                    print("   ✅ تم إنشاء credentials من YOUTUBE_TOKEN")
+                    try:
+                        token_info = json.loads(youtube_token)
+                        print(f"   📋 Token info keys: {list(token_info.keys())}")
+                        
+                        self.credentials = Credentials(
+                            token=token_info.get('token'),
+                            refresh_token=token_info.get('refresh_token'),
+                            token_uri=token_info.get('token_uri', 'https://oauth2.googleapis.com/token'),
+                            client_id=token_info.get('client_id'),
+                            client_secret=token_info.get('client_secret'),
+                            scopes=SCOPES
+                        )
+                        print("   ✅ تم إنشاء credentials من YOUTUBE_TOKEN")
+                        
+                        # إذا كان الـ token منتهي الصلاحية، قم بتحديثه
+                        if self.credentials.expired and self.credentials.refresh_token:
+                            print("   🔄 Token منتهي الصلاحية، جاري التحديث...")
+                            self.credentials.refresh(Request())
+                            print("   ✅ تم تحديث token بنجاح")
+                    except json.JSONDecodeError as e:
+                        print(f"   ❌ خطأ في قراءة YOUTUBE_TOKEN JSON: {e}")
+                        raise
+                    except Exception as e:
+                        print(f"   ❌ خطأ في إنشاء credentials: {e}")
+                        raise
                 else:
                     # OAuth flow للمصادقة المحلية
-                    print("   ⚠️ لم يتم العثور على YOUTUBE_TOKEN")
+                    print("   ⚠️ لم يتم العثور على YOUTUBE_TOKEN في متغيرات البيئة")
                     client_secrets = os.environ.get("YOUTUBE_CLIENT_SECRETS")
                     if client_secrets:
                         client_info = json.loads(client_secrets)
@@ -71,6 +92,7 @@ class YouTubeUploader:
                     self.credentials = flow.run_local_server(port=0)
                 
                 # حفظ token للاستخدام القادم
+                token_file.parent.mkdir(parents=True, exist_ok=True)
                 with open(token_file, 'wb') as f:
                     pickle.dump(self.credentials, f)
                 print(f"   💾 تم حفظ token في: {token_file}")
