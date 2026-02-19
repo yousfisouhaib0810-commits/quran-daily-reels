@@ -11,6 +11,8 @@ on:
 jobs:
   generate-video:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
       # 1. تحميل الكود
