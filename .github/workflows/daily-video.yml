@@ -91,6 +91,7 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add state/state.json || true
-          git diff --staged --quiet || git commit -m "Update state after video generation"
-          git push || true
+          echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > state/last_run.txt
+          git add state/state.json state/last_run.txt || true
+          git diff --staged --quiet || git commit -m "Daily run: $(date -u +%Y-%m-%d)"
+          git push
