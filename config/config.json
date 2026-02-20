@@ -122,8 +122,8 @@
   },
   
   "schedule": {
-    "hour": 6,
-    "minute": 0,
-    "timezone": "Asia/Riyadh"
+    "hour": 8,
+    "minute": 22,
+    "timezone": "Africa/Algiers"
   }
 }
