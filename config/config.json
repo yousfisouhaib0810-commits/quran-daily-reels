@@ -76,7 +76,7 @@
   },
   
   "pexels": {
-    "api_key": "S4In4tuOy8ypvPd5cksUXaT5dEXBh9evQlkNyLeorDHxSLqHqKpYukf0",
+    "api_key": "",
     "search_queries": [
       "aerial ocean waves drone",
       "aerial clouds above",
@@ -103,7 +103,7 @@
     "enabled": true,
     "provider": "openai",
     "model": "gpt-4o",
-    "api_key": "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",
+    "api_key": "",
     "max_attempts": 8,
     "temperature": 0.4
   },
@@ -122,8 +122,8 @@
   },
   
   "schedule": {
-    "hour": 6,
-    "minute": 0,
-    "timezone": "Asia/Riyadh"
+    "hour": 8,
+    "minute": 44,
+    "timezone": "Africa/Algiers"
   }
 }

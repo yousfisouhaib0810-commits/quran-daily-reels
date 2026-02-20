@@ -1,9 +1,9 @@
 name: Daily Quran Reel Generator
 
 on:
-  # جدولة يومية - 6 صباحاً بتوقيت الجزائر (5:00 UTC)
+  # جدولة يومية - 8:44 صباحاً بتوقيت الجزائر (7:44 UTC)
   schedule:
-    - cron: '0 5 * * *'
+    - cron: '44 7 * * *'
   
   # تشغيل يدوي للاختبار
   workflow_dispatch:
@@ -11,6 +11,8 @@ on:
 jobs:
   generate-video:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
       # 1. تحميل الكود
