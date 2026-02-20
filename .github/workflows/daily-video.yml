@@ -1,9 +1,9 @@
 name: Daily Quran Reel Generator
 
 on:
-  # جدولة يومية - 9:20 صباحاً بتوقيت الجزائر (8:20 UTC)
+  # جدولة يومية - 9:05 صباحاً بتوقيت الجزائر (8:05 UTC)
   schedule:
-    - cron: '20 8 * * *'
+    - cron: '5 8 * * *'
   
   # تشغيل يدوي للاختبار
   workflow_dispatch:
