@@ -278,6 +278,25 @@ def main():
                 privacy_status="public"
             )
             print(f"   ✅ YouTube: {result['url']}")
+
+            buffer_api_key = os.environ.get("BUFFER_API_KEY")
+            buffer_tiktok_id = os.environ.get("BUFFER_TIKTOK_ID")
+            if buffer_api_key and buffer_tiktok_id:
+                try:
+                    from src.upload.buffer import BufferUploader
+
+                    buffer = BufferUploader(api_key=buffer_api_key)
+                    buffer_result = buffer.create_update(
+                        profile_id=buffer_tiktok_id,
+                        text=f"{title}\n\n{description}",
+                        media_link=result["url"]
+                    )
+                    update_id = buffer_result.get("update", {}).get("id") or buffer_result.get("id")
+                    print(f"   ✅ Buffer/TikTok: تم إنشاء تحديث {update_id}")
+                except Exception as e:
+                    print(f"   ⚠️ فشل نشر TikTok عبر Buffer: {e}")
+            else:
+                print("   ⚠️ تخطي Buffer/TikTok: BUFFER_API_KEY أو BUFFER_TIKTOK_ID غير متوفر")
         except Exception as e:
             print(f"   ❌ فشل رفع YouTube: {e}")
             import traceback

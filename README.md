@@ -12,6 +12,7 @@
 - ✅ مستشار خلفيات بالذكاء الاصطناعي (OpenRouter)
 - ✅ فلترة تلقائية لأي فيديو يحتوي على أشخاص
 - ✅ رفع تلقائي إلى Google Drive
+- ✅ نشر تلقائي إلى TikTok عبر Buffer
 - ✅ يعمل على GitHub Actions (مجاني)
 
 ## 🚀 الإعداد
@@ -51,6 +52,8 @@
 | `OPENROUTER_API_KEY` | مفتاح OpenRouter لاقتراح الخلفيات (اختياري لكن مستحسن) |
 | `GOOGLE_CREDENTIALS` | محتوى ملف credentials.json |
 | `GOOGLE_DRIVE_FOLDER_ID` | معرف مجلد Google Drive (اختياري) |
+| `BUFFER_API_KEY` | مفتاح Buffer API |
+| `BUFFER_TIKTOK_ID` | معرف حساب TikTok داخل Buffer |
 
 ### 4️⃣ تفعيل Workflow
 

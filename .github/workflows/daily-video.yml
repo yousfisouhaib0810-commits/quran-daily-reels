@@ -65,6 +65,8 @@ jobs:
           GOOGLE_DRIVE_FOLDER_ID: ${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}
           YOUTUBE_ENABLED: "true"
           YOUTUBE_TOKEN: ${{ secrets.YOUTUBE_TOKEN }}
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          BUFFER_TIKTOK_ID: ${{ secrets.BUFFER_TIKTOK_ID }}
         run: |
           python main.py
       
