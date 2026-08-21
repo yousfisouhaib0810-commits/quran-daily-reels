@@ -1,6 +1,7 @@
 """Generate Arabic-only ASS captions from automatic audio alignment."""
 
 from pathlib import Path
+import subprocess
 from typing import Any, Dict, List
 
 from ..timing.aligner import (
@@ -23,7 +24,9 @@ class CaptionGenerator:
         self.video_width = config["video"]["width"]
         self.video_height = config["video"]["height"]
         self.arabic_size = config["fonts"]["arabic"]["size"]
-        self.arabic_font = config["fonts"]["arabic"].get("name", "Amiri")
+        self.arabic_font = self._resolve_arabic_font(
+            config["fonts"]["arabic"].get("name", "Amiri")
+        )
         self.arabic_y = int(self.video_height * config["layout"]["arabic_y_percent"] / 100)
         alignment_config = config.get("timing", {}).get("alignment", {})
         self.max_words = int(alignment_config.get("max_words_per_caption", self.MAX_WORDS))
@@ -36,6 +39,38 @@ class CaptionGenerator:
             analysis_rate=alignment_config.get("analysis_sample_rate", 16000),
         )
         self.validator = AlignmentValidator()
+
+    @staticmethod
+    def _resolve_arabic_font(requested: str) -> str:
+        """Resolve an installed font family for FFmpeg/libass.
+
+        The workflow installs Amiri and Noto fonts, but the requested family
+        may differ between Windows and Ubuntu. Using ``fc-match`` prevents
+        libass from silently selecting a font with missing Quranic glyphs.
+        """
+        candidates = []
+        for candidate in (requested, "Amiri", "Noto Naskh Arabic", "Noto Sans Arabic"):
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+
+        for candidate in candidates:
+            try:
+                result = subprocess.run(
+                    ["fc-match", "-f", "%{family}", candidate],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+                family = (result.stdout or "").split(",", 1)[0].strip()
+                if family and family.lower() not in {"dejavu sans", "sans"}:
+                    print(f"   🔤 الخط العربي المستخدم: {family}")
+                    return family
+            except (OSError, subprocess.SubprocessError):
+                break
+
+        print(f"   🔤 الخط العربي المستخدم (fallback): {requested or 'Amiri'}")
+        return requested or "Amiri"
 
     def _format_time(self, seconds):
         """Convert seconds to ASS centisecond time."""

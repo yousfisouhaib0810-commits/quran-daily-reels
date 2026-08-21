@@ -29,8 +29,8 @@
   
   "fonts": {
     "arabic": {
-      "name": "Amiri Quran",
-      "file": "AmiriQuran-Regular.ttf",
+      "name": "Amiri",
+      "file": "Amiri-Regular.ttf",
       "size": 220,
       "color": "#FFFFFF"
     },

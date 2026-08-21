@@ -35,9 +35,17 @@ def load_config():
         return json.load(f)
 
 
-def select_random_reciter(config, last_reciter=None):
+def select_random_reciter(config, last_reciter=None, forced_reciter_id=None):
     """اختيار قارئ عشوائي مختلف عن السابق"""
     reciters = config["reciters"]
+
+    if forced_reciter_id:
+        forced = next((r for r in reciters if r["id"] == forced_reciter_id), None)
+        if forced:
+            print(f"   🔁 إعادة إنشاء الفيديو السابق بالقارئ: {forced['name']}")
+            return forced
+        print(f"   ⚠️ القارئ المطلوب للإعادة غير موجود: {forced_reciter_id}")
+
     available = [r for r in reciters if r["id"] != last_reciter]
     
     if not available:
@@ -64,7 +72,12 @@ def main():
     )
     
     last_reciter = selector.state.get("last_reciter")
-    reciter = select_random_reciter(config, last_reciter)
+    replay_request = selector.state.get("replay_once") or {}
+    reciter = select_random_reciter(
+        config,
+        last_reciter,
+        forced_reciter_id=replay_request.get("reciter_id"),
+    )
     print(f"   القارئ: {reciter['name']}")
     
     # ===== 2. اختيار الآيات =====

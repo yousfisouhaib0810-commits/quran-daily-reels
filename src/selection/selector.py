@@ -11,21 +11,51 @@ class AyahSelector:
     
     def __init__(self, state_file="state/state.json", min_duration=15):
         self.state_file = Path(state_file)
+        self.replay_file = self.state_file.parent / "replay_once.json"
         self.min_duration = min_duration
         self.state = self._load_state()
     
     def _load_state(self):
         """تحميل الحالة"""
+        state = None
         if self.state_file.exists():
             with open(self.state_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {
+                state = json.load(f)
+
+        if state is None:
+            state = {
             "current_position": {"surah": 1, "ayah": 1},
             "last_run": None,
             "last_reciter": None,
             "last_background": None,
             "videos_generated": 0
-        }
+            }
+
+        # This file is intentionally separate from state.json. GitHub
+        # Actions may restore an older state cache over the checked-out state,
+        # while the one-shot replay request must survive that restore.
+        replay = self._load_replay_request()
+        if replay:
+            state["replay_once"] = replay
+            if replay.get("position"):
+                state["current_position"] = replay["position"]
+
+        return state
+
+    def _load_replay_request(self):
+        if not self.replay_file.exists():
+            return None
+        try:
+            with self.replay_file.open('r', encoding='utf-8') as f:
+                replay = json.load(f)
+            if not isinstance(replay, dict):
+                return None
+            position = replay.get("position") or {}
+            if not position.get("surah") or not position.get("ayah"):
+                return None
+            return replay
+        except (OSError, json.JSONDecodeError, TypeError):
+            return None
     
     def _save_state(self):
         """حفظ الحالة"""
@@ -124,4 +154,13 @@ class AyahSelector:
             self.state["last_reciter"] = reciter_id
         if background_id:
             self.state["last_background"] = background_id
+        # Consume a replay request only after the complete video pipeline has
+        # reached this final state update. If generation/upload fails earlier,
+        # the request remains available for the next run.
+        self.state.pop("replay_once", None)
+        if self.replay_file.exists():
+            try:
+                self.replay_file.unlink()
+            except OSError as exc:
+                print(f"⚠️ تعذر حذف طلب الإعادة المؤقت: {exc}")
         self._save_state()
