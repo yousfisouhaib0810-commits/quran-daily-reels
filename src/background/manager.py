@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 from typing import Iterable, List, Optional
 
+from .quality import BackgroundQualityFilter
+
 
 class BackgroundManager:
     """مدير الخلفيات مع دعم الذكاء الاصطناعي وفلترة الأشخاص."""
@@ -19,12 +21,14 @@ class BackgroundManager:
         banned_file: str = "state/banned_backgrounds.json",
         advisor=None,
         person_detector=None,
-        max_attempts: int = 5
+        max_attempts: int = 5,
+        quality_filter=None,
     ) -> None:
         self.pexels = pexels_api
         self.advisor = advisor
         self.person_detector = person_detector
         self.max_attempts = max(1, max_attempts)
+        self.quality_filter = quality_filter or BackgroundQualityFilter()
 
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -86,7 +90,8 @@ class BackgroundManager:
         if min_duration:
             target_min_duration = max(target_min_duration, int(min_duration))
 
-        attempts = 0
+        candidate_checks = 0
+        max_candidate_checks = self.max_attempts * 4
 
         for query in queries:
             videos = self.pexels.search_videos(
@@ -101,13 +106,23 @@ class BackgroundManager:
                     continue
                 if video["id"] in self.used_backgrounds[-50:]:
                     continue
-                if attempts >= self.max_attempts:
+                if candidate_checks >= max_candidate_checks:
                     print("   ⚠️ تجاوزنا الحد الأقصى للمحاولات دون العثور على خلفية مناسبة.")
                     return None
 
-                attempts += 1
+                candidate_checks += 1
                 local_path = self.pexels.download_video(video["url"], video["id"])
                 if not local_path:
+                    continue
+
+                quality = self.quality_filter.check(local_path)
+                if not quality.accepted:
+                    print(
+                        f"   ⏭️ تم استبعاد الخلفية {video['id']}: {quality.reason} "
+                        f"(حركة={quality.metrics.get('motion_mean', 0):.4f}, "
+                        f"أزرق={quality.metrics.get('blue_ratio', 0):.2f})"
+                    )
+                    self._ban_background(video["id"])
                     continue
 
                 if self.person_detector and self.person_detector.contains_person(local_path):

@@ -29,7 +29,7 @@ class VideoRenderer:
         
         background_path: فيديو الخلفية المُعد
         audio_path: الصوت المدمج مع padding
-        ass_path: ملف الترجمة ASS
+        ass_path: ملف النص العربي ASS
         """
         if output_filename is None:
             date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

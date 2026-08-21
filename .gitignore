@@ -45,6 +45,7 @@ temp/
 output/*.mp4
 data/audio/
 data/backgrounds/
+data/timing_cache/
 config/credentials.json
 config/token.pickle
 

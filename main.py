@@ -20,6 +20,7 @@ from src.selection.selector import AyahSelector
 from src.captions.generator import CaptionGenerator
 from src.audio.processor import AudioProcessor
 from src.background.manager import BackgroundManager
+from src.background.quality import BackgroundQualityFilter
 from src.ai.background_advisor import BackgroundAdvisor
 from src.detection.person_detector import PersonDetector
 from src.render.renderer import VideoRenderer
@@ -85,7 +86,7 @@ def main():
     
     # ===== 3. جلب النصوص (نص عربي فقط) =====
     print("\n📝 جلب النصوص... (بدون ترجمة)")
-    quran_api = QuranAPI(translation_id=config["sources"]["translation_id"]) 
+    quran_api = QuranAPI()
     
     ayahs_data = []
     for ayah_info in selection["ayahs"]:
@@ -112,9 +113,11 @@ def main():
     
     final_audio = audio_processor.concatenate_audio(
         audio_files,
-        output_path="temp/final_audio.mp3",
+        output_path="temp/final_audio.wav",
         padding_before=padding_before,
-        padding_after=padding_after
+        padding_after=padding_after,
+        timeline_items=ayahs_data,
+        timeline_path="temp/timeline.json"
     )
     
     total_duration = audio_processor.get_duration(final_audio)
@@ -131,6 +134,7 @@ def main():
 
     ai_config = config.get("ai_background", {})
     person_config = config.get("person_filter", {})
+    background_quality_config = config.get("background_quality", {})
 
     advisor = None
     # تفضيل مفتاح من الإعدادات، ثم المتغير البيئي OPENAI_API_KEY
@@ -165,18 +169,34 @@ def main():
             print(f"   ⚠️ تعذر تهيئة فلتر الأشخاص: {exc}")
 
     pexels_api_key = os.environ.get("PEXELS_API_KEY", config["pexels"]["api_key"])
-    
-    if pexels_api_key == "YOUR_PEXELS_API_KEY_HERE":
-        print("   ⚠️ لم يتم تعيين Pexels API Key - استخدام خلفية افتراضية")
-        background_path = create_default_background(total_duration, config)
+
+    invalid_pexels_values = {"", "YOUR_PEXELS_API_KEY_HERE", "YOUR_PEXELS_API_KEY"}
+    has_pexels_key = bool(pexels_api_key and pexels_api_key.strip() not in invalid_pexels_values)
+
+    if not has_pexels_key:
+        print("   ⚠️ لا يوجد مفتاح Pexels صالح - لن يتم استعمال الخلفية الزرقاء الثابتة")
+        background_path = create_safe_animated_background(total_duration, config)
         background = None
     else:
         pexels = PexelsAPI(api_key=pexels_api_key, cache_dir="data/backgrounds")
+        quality_filter = BackgroundQualityFilter(
+            sample_frames=background_quality_config.get("sample_frames", 12),
+            resize_width=background_quality_config.get("resize_width", 320),
+            motion_threshold=background_quality_config.get("motion_threshold", 0.012),
+            uniform_ratio_threshold=background_quality_config.get("uniform_ratio_threshold", 0.82),
+            blue_ratio_threshold=background_quality_config.get("blue_ratio_threshold", 0.62),
+            frame_std_threshold=background_quality_config.get("frame_std_threshold", 18.0),
+            edge_ratio_threshold=background_quality_config.get("edge_ratio_threshold", 0.010),
+        )
         bg_manager = BackgroundManager(
             pexels,
             advisor=advisor,
             person_detector=person_detector,
-            max_attempts=ai_config.get("max_attempts", 5)
+            max_attempts=background_quality_config.get(
+                "max_attempts",
+                max(12, ai_config.get("max_attempts", 5)),
+            ),
+            quality_filter=quality_filter,
         )
         
         background = bg_manager.get_random_background(
@@ -197,13 +217,19 @@ def main():
             )
             print(f"   تم تحضير الخلفية: {background['id']}")
         else:
-            background_path = create_default_background(total_duration, config)
+            print("   ⚠️ لم يتم العثور على خلفية صالحة - استعمال خلفية متحركة آمنة")
+            background_path = create_safe_animated_background(total_duration, config)
     
-    # ===== 6. توليد الترجمة =====
-    print("\n📝 توليد الترجمة...")
+    # ===== 6. توليد النص العربي المتزامن =====
+    print("\n📝 توليد النص العربي المتزامن...")
     caption_gen = CaptionGenerator(config)
     
-    segments = caption_gen.create_segments_from_ayahs(ayahs_data, padding_before=padding_before)
+    segments = caption_gen.create_segments_from_ayahs(
+        ayahs_data,
+        padding_before=padding_before,
+        reciter_id=reciter["id"],
+        timeline=audio_processor.last_timeline,
+    )
     
     ass_path = caption_gen.generate_ass(
         segments,
@@ -211,7 +237,7 @@ def main():
         padding_before=0,
         padding_after=0
     )
-    print(f"   تم إنشاء ملف الترجمة")
+    print(f"   تم إنشاء ملف النص العربي")
     
     # ===== 7. رندر الفيديو =====
     print("\n🎥 رندر الفيديو...")
@@ -326,29 +352,36 @@ def main():
     return final_video
 
 
-def create_default_background(duration, config):
-    """إنشاء خلفية افتراضية (تدرج أزرق داكن)"""
+def create_safe_animated_background(duration, config):
+    """إنشاء خلفية احتياطية متحركة محايدة، وليست صورة زرقاء ثابتة."""
     import subprocess
     
-    output_path = "temp/default_background.mp4"
+    output_path = "temp/safe_animated_background.mp4"
     Path("temp").mkdir(exist_ok=True)
     
     width = config["video"]["width"]
     height = config["video"]["height"]
     fps = config["video"]["fps"]
     
-    # إنشاء خلفية متدرجة
+    # ضجيج زمني خفيف يمنع الخلفية من أن تكون إطارًا ثابتًا أو شاشة زرقاء.
     cmd = [
         'ffmpeg', '-y',
         '-f', 'lavfi',
-        '-i', f'color=c=0x1a1a2e:size={width}x{height}:duration={duration}:rate={fps}',
-        '-vf', 'format=yuv420p',
+        '-i', f'color=c=0x101010:size={width}x{height}:rate={fps}',
+        '-t', str(duration),
+        '-vf', 'noise=alls=8:allf=t+u,eq=contrast=1.08:brightness=-0.03,format=yuv420p',
         '-c:v', 'libx264', '-preset', 'fast',
+        '-an',
         output_path
     ]
     
     subprocess.run(cmd, capture_output=True, check=True)
     return output_path
+
+
+def create_default_background(duration, config):
+    """Backward-compatible alias for the safe animated fallback."""
+    return create_safe_animated_background(duration, config)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,13 @@
     "min_duration_seconds": 20,
     "padding_before_ms": 200,
     "padding_after_ms": 200,
-    "allow_short_end_of_surah": true
+    "allow_short_end_of_surah": true,
+    "alignment": {
+      "max_words_per_caption": 3,
+      "analysis_sample_rate": 16000,
+      "timings_dir": "data/timings",
+      "cache_dir": "data/timing_cache"
+    }
   },
   
   "fonts": {
@@ -71,8 +77,7 @@
   
   "sources": {
     "quran_api": "https://api.quran.com/api/v4",
-    "everyayah_base": "https://everyayah.com/data",
-    "translation_id": 131
+    "everyayah_base": "https://everyayah.com/data"
   },
   
   "pexels": {
@@ -97,6 +102,17 @@
     ],
     "orientation": "portrait",
     "min_duration": 20
+  },
+
+  "background_quality": {
+    "sample_frames": 12,
+    "resize_width": 320,
+    "motion_threshold": 0.012,
+    "uniform_ratio_threshold": 0.82,
+    "blue_ratio_threshold": 0.62,
+    "frame_std_threshold": 18.0,
+    "edge_ratio_threshold": 0.010,
+    "max_attempts": 20
   },
   
   "ai_background": {

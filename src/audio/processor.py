@@ -1,9 +1,11 @@
 """
 معالجة الصوت - دمج ملفات الآيات وإضافة padding
 """
+import json
 import subprocess
 from pathlib import Path
-import tempfile
+
+from pydub import AudioSegment
 
 
 class AudioProcessor:
@@ -12,71 +14,109 @@ class AudioProcessor:
     def __init__(self, output_dir="temp"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.last_timeline = None
     
-    def concatenate_audio(self, audio_files, output_path, padding_before=0.2, padding_after=0.2):
+    def concatenate_audio(
+        self,
+        audio_files,
+        output_path,
+        padding_before=0.2,
+        padding_after=0.2,
+        timeline_items=None,
+        timeline_path=None,
+    ):
         """
-        دمج ملفات صوت متعددة مع padding
+        دمج ملفات الآيات مع خط زمني sample-accurate.
         
         audio_files: قائمة مسارات ملفات MP3
+        timeline_items: بيانات الآيات الموافقة لمسارات الصوت
+        timeline_path: مسار اختياري لحفظ خط الزمن بصيغة JSON
+
+        يتم فك كل ملف مرة واحدة إلى PCM موحد ثم دمجه. هذا يمنع تراكم
+        فروق MP3/ffprobe التي كانت تجعل توقيت الترجمة يختلف عن الصوت النهائي.
         """
         if not audio_files:
             raise ValueError("لا توجد ملفات صوت للدمج!")
-        
+
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # إذا كان ملف واحد فقط
-        if len(audio_files) == 1:
-            # إضافة padding فقط
-            pad_cmd = [
-                'ffmpeg', '-y',
-                '-i', str(audio_files[0]),
-                '-af', f'adelay={int(padding_before*1000)}|{int(padding_before*1000)},apad=pad_dur={padding_after}',
-                '-c:a', 'libmp3lame', '-b:a', '192k',
-                str(output_path)
-            ]
-            subprocess.run(pad_cmd, capture_output=True, check=True)
-            return str(output_path)
-        
-        # إنشاء ملف concat list
-        concat_list = self.output_dir / "concat_list.txt"
-        
-        with open(concat_list, 'w', encoding='utf-8') as f:
-            for audio_file in audio_files:
-                # تحويل المسار لصيغة FFmpeg
-                safe_path = str(Path(audio_file).absolute()).replace("\\", "/")
-                f.write(f"file '{safe_path}'\n")
-        
-        # ملف مؤقت للصوت المدمج
-        temp_concat = self.output_dir / "temp_concat.mp3"
-        
-        # دمج الملفات
-        concat_cmd = [
-            'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
-            '-i', str(concat_list),
-            '-c:a', 'libmp3lame', '-b:a', '192k',
-            str(temp_concat)
-        ]
-        
-        subprocess.run(concat_cmd, capture_output=True, check=True)
-        
-        # إضافة padding (صمت قبل وبعد)
-        pad_cmd = [
-            'ffmpeg', '-y',
-            '-i', str(temp_concat),
-            '-af', f'adelay={int(padding_before*1000)}|{int(padding_before*1000)},apad=pad_dur={padding_after}',
-            '-c:a', 'libmp3lame', '-b:a', '192k',
-            str(output_path)
-        ]
-        
-        subprocess.run(pad_cmd, capture_output=True, check=True)
-        
-        # تنظيف الملفات المؤقتة
-        if concat_list.exists():
-            concat_list.unlink()
-        if temp_concat.exists():
-            temp_concat.unlink()
-        
+
+        target_rate = 48000
+        target_channels = 2
+        target_width = 2
+
+        def sample_count(segment):
+            bytes_per_frame = target_channels * target_width
+            return len(segment.raw_data) // bytes_per_frame
+
+        combined = AudioSegment.silent(duration=0, frame_rate=target_rate)
+        combined = combined.set_channels(target_channels).set_sample_width(target_width)
+        before = AudioSegment.silent(
+            duration=max(0, int(round(padding_before * 1000))),
+            frame_rate=target_rate,
+        ).set_channels(target_channels).set_sample_width(target_width)
+        combined += before
+
+        timeline = []
+        item_data = timeline_items or []
+        for index, audio_file in enumerate(audio_files):
+            segment = AudioSegment.from_file(str(audio_file))
+            segment = (
+                segment.set_frame_rate(target_rate)
+                .set_channels(target_channels)
+                .set_sample_width(target_width)
+            )
+
+            start_sample = sample_count(combined)
+            combined += segment
+            end_sample = sample_count(combined)
+
+            metadata = dict(item_data[index]) if index < len(item_data) else {}
+            metadata.update({
+                "audio_path": str(audio_file),
+                "start_sample": start_sample,
+                "end_sample": end_sample,
+                "duration_samples": end_sample - start_sample,
+                "start": start_sample / target_rate,
+                "end": end_sample / target_rate,
+                "duration": (end_sample - start_sample) / target_rate,
+            })
+            timeline.append(metadata)
+
+        after = AudioSegment.silent(
+            duration=max(0, int(round(padding_after * 1000))),
+            frame_rate=target_rate,
+        ).set_channels(target_channels).set_sample_width(target_width)
+        combined += after
+
+        output_format = output_path.suffix.lower().lstrip(".") or "wav"
+        export_parameters = ["-acodec", "pcm_s16le"] if output_format == "wav" else []
+        combined.export(
+            str(output_path),
+            format=output_format,
+            parameters=export_parameters,
+        )
+
+        self.last_timeline = {
+            "version": 1,
+            "sample_rate": target_rate,
+            "channels": target_channels,
+            "sample_width": target_width,
+            "padding_before": padding_before,
+            "padding_after": padding_after,
+            "duration_samples": sample_count(combined),
+            "duration": sample_count(combined) / target_rate,
+            "items": timeline,
+        }
+
+        if timeline_path:
+            timeline_path = Path(timeline_path)
+            timeline_path.parent.mkdir(parents=True, exist_ok=True)
+            timeline_path.write_text(
+                json.dumps(self.last_timeline, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
         return str(output_path)
     
     def get_duration(self, audio_path):
